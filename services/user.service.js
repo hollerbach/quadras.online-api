@@ -23,7 +23,7 @@ class UserService {
 
     // Gerar hash da senha
     const hashedPassword = await bcrypt.hash(password, config.auth.password.saltRounds);
-    
+
     // Gerar token de verificação
     const verifyToken = crypto.randomBytes(32).toString('hex');
     const verifyTokenExpires = Date.now() + config.auth.verification.tokenExpiry;
@@ -47,11 +47,164 @@ class UserService {
     delete userResponse.password;
     delete userResponse.verifyToken;
     delete userResponse.twoFactorSecret;
-    
+
     return {
       user: userResponse,
       verifyToken
     };
+  }
+
+  /**
+   * Busca um usuário por ID
+   * @param {string} id - ID do usuário
+   * @returns {Promise<Object>} Usuário encontrado
+   */
+  async findById(id) {
+    const user = await User.findById(id);
+    if (!user) {
+      throw new ApiError(404, 'Usuário não encontrado');
+    }
+    return user;
+  }
+
+  /**
+   * Atualiza os dados de um usuário
+   * @param {string} userId - ID do usuário
+   * @param {Object} updates - Dados a serem atualizados
+   * @returns {Promise<Object>} Usuário atualizado
+   */
+  async updateUser(userId, updates) {
+    const user = await this.findById(userId);
+
+    // Aplicar atualizações
+    Object.keys(updates).forEach(key => {
+      if (key !== 'password' && key !== 'role' && key !== 'verified'
+        && key !== 'twoFactorEnabled' && key !== 'twoFactorSecret') {
+        user[key] = updates[key];
+      }
+    });
+
+    await user.save();
+    return user;
+  }
+
+  /**
+   * Altera a senha de um usuário
+   * @param {string} userId - ID do usuário
+   * @param {string} currentPassword - Senha atual
+   * @param {string} newPassword - Nova senha
+   * @returns {Promise<Object>} Resultado da operação
+   */
+  async changePassword(userId, currentPassword, newPassword) {
+    const user = await this.findById(userId);
+
+    // Verificar senha atual
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      throw new ApiError(400, 'Senha atual incorreta');
+    }
+
+    // Atualizar senha
+    user.password = await bcrypt.hash(newPassword, config.auth.password.saltRounds);
+    await user.save();
+
+    return { message: 'Senha alterada com sucesso' };
+  }
+
+  /**
+   * Busca todos os usuários com paginação e filtros
+   * @param {Object} options - Opções de busca e paginação
+   * @returns {Promise<Object>} Usuários encontrados e metadados de paginação
+   */
+  async findAllUsers(options) {
+    const { page, limit, sort, order, search } = options;
+
+    // Montar query
+    let query = {};
+    if (search) {
+      query.email = { $regex: search, $options: 'i' };
+    }
+
+    // Calcular total
+    const total = await User.countDocuments(query);
+
+    // Ordenação
+    const sortOptions = {};
+    sortOptions[sort] = order === 'desc' ? -1 : 1;
+
+    // Executar query com paginação
+    const users = await User.find(query)
+      .sort(sortOptions)
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    return {
+      users,
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit)
+    };
+  }
+
+  /**
+   * Atualiza um usuário por um administrador
+   * @param {string} userId - ID do usuário
+   * @param {Object} updates - Dados a serem atualizados
+   * @returns {Promise<Object>} Usuário atualizado
+   */
+  async adminUpdateUser(userId, updates) {
+    const user = await this.findById(userId);
+
+    // Aplicar atualizações permitidas para admin
+    Object.keys(updates).forEach(key => {
+      if (key !== 'password' && key !== 'twoFactorSecret') {
+        user[key] = updates[key];
+      }
+    });
+
+    await user.save();
+    return user;
+  }
+
+  /**
+   * Desativa um usuário (sem excluir do banco)
+   * @param {string} userId - ID do usuário
+   * @returns {Promise<Object>} Resultado da operação
+   */
+  async deactivateUser(userId) {
+    const user = await this.findById(userId);
+
+    user.active = false;
+    await user.save();
+
+    return { message: 'Usuário desativado com sucesso' };
+  }
+
+  /**
+   * Sanitiza dados do usuário para retorno na API
+   * @param {Object} user - Usuário a ser sanitizado
+   * @param {boolean} isAdmin - Se o sanitizador está sendo usado por um admin
+   * @returns {Object} Usuário sem dados sensíveis
+   */
+  sanitizeUser(user, isAdmin = false) {
+    const sanitized = user.toObject ? user.toObject() : { ...user };
+
+    // Remover campos sensíveis
+    delete sanitized.password;
+    delete sanitized.twoFactorSecret;
+    delete sanitized.verifyToken;
+    delete sanitized.verifyTokenExpires;
+    delete sanitized.resetToken;
+    delete sanitized.resetTokenExpires;
+
+    // Se não for admin, remover campos adicionais
+    if (!isAdmin) {
+      delete sanitized.failedLoginAttempts;
+      delete sanitized.lockUntil;
+    }
+
+    return sanitized;
   }
 
   /**

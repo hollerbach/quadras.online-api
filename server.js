@@ -4,6 +4,7 @@ const app = require('./app');
 const mongoose = require('mongoose');
 const logger = require('./services/logger');
 const config = require('./config/env.config');
+let server;
 
 // Configuração de processo
 process.on('uncaughtException', (err) => {
@@ -21,7 +22,7 @@ mongoose.connect(uri, options)
     logger.info('✅ Conectado ao MongoDB Atlas');
     
     // Iniciar servidor apenas após conexão com o banco de dados
-    const server = app.listen(config.app.port, () => {
+    server = app.listen(config.app.port, () => {
       logger.info(`🚀 Server rodando na porta ${config.app.port} em modo ${config.app.env}`);
     });
 
