@@ -338,6 +338,39 @@ class UserService {
 
     return user;
   }
+
+  // Adicionar ao userService.js
+  /**
+   * Incrementa contador de falhas de login e bloqueia conta se necessário
+   * @param {string} email - Email do usuário
+   * @returns {Promise<Object>} Informação sobre bloqueio
+   */
+  async incrementLoginAttempts(email) {
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Mesmo para usuários que não existem, simular delays para evitar
+      // inferência de existência por timing attacks
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 500));
+      return null;
+    }
+
+    await user.incrementLoginAttempts();
+
+    return {
+      isLocked: user.isLocked(),
+      attemptsRemaining: Math.max(0, 5 - user.failedLoginAttempts),
+      lockExpiry: user.lockUntil
+    };
+  }
+
+  /**
+   * Reseta contador de falhas de login após login bem-sucedido
+   * @param {string} userId - ID do usuário
+   */
+  async resetLoginAttempts(userId) {
+    const user = await this.findById(userId);
+    await user.resetLoginAttempts();
+  }
 }
 
 module.exports = new UserService();
