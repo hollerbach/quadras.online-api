@@ -5,6 +5,7 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 const config = require('./config/env.config');
+const healthController = require('./controllers/health.controller');
 
 // Middlewares de segurança
 const { 
@@ -83,12 +84,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
 // Rota de verificação de saúde
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'UP',
-    timestamp: new Date().toISOString()
-  });
-});
+app.get('/api/health', healthController.checkHealth);
 
 // Middleware para rotas não encontradas
 app.use(notFoundHandler);
