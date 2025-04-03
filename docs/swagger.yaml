@@ -1,53 +1,89 @@
 openapi: 3.0.0
 info:
-  title: Auth API
+  title: Mercearia Digital API
   version: 1.0.0
-  description: API RESTful de autenticação com verificação de e-mail e RBAC
+  description: API de autenticação com verificação de e-mail, RBAC e autenticação em dois fatores
 servers:
   - url: http://localhost:3000/api
+    description: Servidor de desenvolvimento
+  - url: https://api.mercearia.digital/api
+    description: Servidor de produção
+
+tags:
+  - name: Auth
+    description: Autenticação e gerenciamento de credenciais
+  - name: Users
+    description: Gerenciamento de usuários
+  - name: Admin
+    description: Operações administrativas
 
 paths:
   /auth/register:
     post:
       summary: Registrar novo usuário
+      tags:
+        - Auth
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                email:
-                  type: string
-                password:
-                  type: string
-                role:
-                  type: string
-              required: [email, password]
+              $ref: '#/components/schemas/UserRegistration'
       responses:
         '201':
-          description: Usuário criado
+          description: Usuário criado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Usuário registrado com sucesso. Verifique seu e-mail para ativar a conta.
+                  user:
+                    $ref: '#/components/schemas/UserBasic'
         '400':
-          description: E-mail já registrado
+          description: Dados inválidos ou e-mail já registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /auth/verify-email:
     get:
       summary: Verificar e-mail via token
+      tags:
+        - Auth
       parameters:
         - in: query
           name: token
           schema:
             type: string
           required: true
+          description: Token de verificação
       responses:
         '200':
-          description: E-mail verificado
+          description: E-mail verificado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Email verificado com sucesso
         '400':
-          description: Token inválido
+          description: Token inválido ou expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /auth/login:
     post:
       summary: Autenticar usuário
+      tags:
+        - Auth
       requestBody:
         required: true
         content:
@@ -57,44 +93,53 @@ paths:
               properties:
                 email:
                   type: string
+                  format: email
                 password:
                   type: string
+                  format: password
               required: [email, password]
       responses:
         '200':
           description: Login bem-sucedido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/UserBasic'
+        '206':
+          description: Login parcial - 2FA necessário
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 2FA necessário
+                  tempToken:
+                    type: string
+        '401':
+          description: Credenciais inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
-          description: Conta não verificada
+          description: Conta não verificada ou bloqueada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
-  /auth/logout:
+  /auth/2fa/verify:
     post:
-      summary: Logout do usuário
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Logout realizado
-
-  /auth/password-reset/request:
-    post:
-      summary: Solicitar redefinição de senha
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                email:
-                  type: string
-              required: [email]
-      responses:
-        '200':
-          description: Token enviado por e-mail
-
-  /auth/password-reset/confirm:
-    post:
-      summary: Confirmar redefinição de senha
+      summary: Verificar token 2FA durante login
+      tags:
+        - Auth
       requestBody:
         required: true
         content:
@@ -104,23 +149,479 @@ paths:
               properties:
                 token:
                   type: string
-                newPassword:
+                  description: Token TOTP de 6 dígitos
+                tempToken:
                   type: string
-              required: [token, newPassword]
+                  description: Token temporário recebido no login parcial
+              required: [token, tempToken]
       responses:
         '200':
-          description: Senha alterada
+          description: Verificação 2FA bem-sucedida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/UserBasic'
+        '401':
+          description: Token 2FA inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
-  /auth/admin-only:
-    get:
-      summary: Acesso exclusivo para admins
+  /auth/2fa/setup:
+    post:
+      summary: Configurar autenticação de dois fatores
+      tags:
+        - Auth
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Acesso permitido
+          description: 2FA configurado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  qrCode:
+                    type: string
+                    description: QR Code em formato data URL
+                  recoveryCodes:
+                    type: array
+                    items:
+                      type: string
+                    description: Códigos de recuperação para uso em emergência
+
+  /auth/2fa/disable:
+    post:
+      summary: Desativar autenticação de dois fatores
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  description: Token TOTP de 6 dígitos atual
+              required: [token]
+      responses:
+        '200':
+          description: 2FA desativado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 2FA desativado com sucesso
+        '401':
+          description: Token 2FA inválido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/refresh-token:
+    post:
+      summary: Atualizar tokens usando refresh token
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token (opcional se estiver em cookie)
+      responses:
+        '200':
+          description: Tokens atualizados com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+        '401':
+          description: Refresh token inválido, expirado ou revogado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      summary: Logout do usuário
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout realizado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logout realizado com sucesso
+
+  /auth/password-reset/request:
+    post:
+      summary: Solicitar redefinição de senha
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+              required: [email]
+      responses:
+        '200':
+          description: Instruções enviadas por e-mail (mesmo resposta para e-mails não cadastrados)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Instruções de redefinição enviadas para o e-mail
+
+  /auth/password-reset/confirm:
+    post:
+      summary: Confirmar redefinição de senha
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  description: Token de redefinição de senha
+                newPassword:
+                  type: string
+                  format: password
+                  description: Nova senha
+              required: [token, newPassword]
+      responses:
+        '200':
+          description: Senha alterada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Senha redefinida com sucesso
+        '400':
+          description: Token inválido ou expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/profile:
+    get:
+      summary: Obter perfil do usuário atual
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil do usuário
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+    put:
+      summary: Atualizar perfil do usuário
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfileUpdate'
+      responses:
+        '200':
+          description: Perfil atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/password:
+    put:
+      summary: Alterar senha do usuário
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                newPassword:
+                  type: string
+                  format: password
+              required: [currentPassword, newPassword]
+      responses:
+        '200':
+          description: Senha alterada com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Senha alterada com sucesso
+        '400':
+          description: Senha atual incorreta ou nova senha inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users:
+    get:
+      summary: Listar todos os usuários (somente admin)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+          description: Quantidade de itens por página
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: email
+          description: Campo para ordenação
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Ordem da ordenação
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Termo de busca (aplicado ao email)
+      responses:
+        '200':
+          description: Lista de usuários
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserProfile'
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        description: Total de registros
+                      page:
+                        type: integer
+                        description: Página atual
+                      pages:
+                        type: integer
+                        description: Total de páginas
+                      limit:
+                        type: integer
+                        description: Itens por página
         '403':
           description: Acesso negado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}:
+    get:
+      summary: Obter usuário por ID (somente admin)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID do usuário
+      responses:
+        '200':
+          description: Detalhes do usuário
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetails'
+        '404':
+          description: Usuário não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Atualizar usuário por ID (somente admin)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID do usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserUpdate'
+      responses:
+        '200':
+          description: Usuário atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetails'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Usuário não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Desativar usuário por ID (somente admin)
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID do usuário
+      responses:
+        '200':
+          description: Usuário desativado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Usuário desativado com sucesso
+        '400':
+          description: Não é possível desativar o próprio usuário
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Usuário não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /health:
+    get:
+      summary: Verificar status da API
+      tags:
+        - System
+      responses:
+        '200':
+          description: Status da API
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+                  timestamp:
+                    type: string
+                    format: date-time
 
 components:
   securitySchemes:
@@ -128,3 +629,128 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
+  schemas:
+    UserRegistration:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        role:
+          type: string
+          enum: [user, admin]
+          default: user
+        enable2FA:
+          type: boolean
+          default: false
+      required: [email, password]
+
+    UserBasic:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [user, admin]
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [user, admin]
+        verified:
+          type: boolean
+        twoFactorEnabled:
+          type: boolean
+        lastLogin:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserDetails:
+      allOf:
+        - $ref: '#/components/schemas/UserProfile'
+        - type: object
+          properties:
+            active:
+              type: boolean
+            failedLoginAttempts:
+              type: integer
+            lockUntil:
+              type: string
+              format: date-time
+              nullable: true
+
+    UserProfileUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        phoneNumber:
+          type: string
+        address:
+          type: object
+          properties:
+            street:
+              type: string
+            city:
+              type: string
+            state:
+              type: string
+            postalCode:
+              type: string
+            country:
+              type: string
+
+    AdminUserUpdate:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, admin]
+        verified:
+          type: boolean
+        active:
+          type: boolean
+        twoFactorEnabled:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        message:
+          type: string
+          example: Descrição do erro
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string

@@ -1,40 +1,138 @@
+// routes/auth.routes.js
 const express = require('express');
 const router = express.Router();
-const authCtrl = require('../controllers/auth.controller');
+const authController = require('../controllers/auth.controller');
 
 // Middlewares
-const { authenticate } = require('../middlewares/auth.middleware');
-const { authorize } = require('../middlewares/rbac.middleware');
-const appKeyMiddleware = require('../middlewares/appKey.middleware');
-const recaptchaMiddleware = require('../middlewares/recaptcha.middleware');
-const rateLimiter = require('../middlewares/rateLimiter.middleware');
+const { authenticate } = require('../middleware/auth.middleware');
+const { authorize } = require('../middleware/rbac.middleware');
+const { 
+  validateRequest, 
+  validationSchemas 
+} = require('../middleware/validation.middleware');
+const { 
+  loginRateLimit, 
+  verifyAppKey, 
+  sensitiveRouteProtection 
+} = require('../middleware/security.middleware');
 
-// Registro de novo usuário
-router.post('/register', authCtrl.register);
+/**
+ * @route POST /api/auth/register
+ * @desc Registrar novo usuário
+ * @access Público
+ */
+router.post(
+  '/register',
+  validationSchemas.register,
+  validateRequest,
+  authController.register
+);
 
-// Verificação de e-mail via token
-router.get('/verify-email', authCtrl.verifyEmail);
-
-// Login com segurança: App Key, rate limit e reCAPTCHA
-router.post('/login', rateLimiter, appKeyMiddleware, recaptchaMiddleware, authCtrl.login);
-
-// Logout (JWT deve ser descartado no front)
-router.post('/logout', authenticate, authCtrl.logout);
-
-// Solicitar redefinição de senha
-router.post('/password-reset/request', authCtrl.requestPasswordReset);
-
-// Confirmar nova senha com token
-router.post('/password-reset/confirm', authCtrl.resetPassword);
-
-// Rota protegida para admin
+/**
+ * @route GET /api/auth/verify-email
+ * @desc Verificar e-mail via token
+ * @access Público
+ */
 router.get(
-  '/admin-only',
+  '/verify-email',
+  authController.verifyEmail
+);
+
+/**
+ * @route POST /api/auth/login
+ * @desc Login de usuário
+ * @access Público
+ */
+router.post(
+  '/login',
+  loginRateLimit,
+  verifyAppKey,
+  validationSchemas.login,
+  validateRequest,
+  authController.login
+);
+
+/**
+ * @route POST /api/auth/refresh-token
+ * @desc Atualizar tokens usando refresh token
+ * @access Público
+ */
+router.post(
+  '/refresh-token',
+  authController.refreshToken
+);
+
+/**
+ * @route POST /api/auth/logout
+ * @desc Logout e invalidação de tokens
+ * @access Privado
+ */
+router.post(
+  '/logout',
   authenticate,
-  authorize(['admin']),
-  (req, res) => {
-    res.json({ message: 'Acesso autorizado para admin' });
-  }
+  authController.logout
+);
+
+/**
+ * @route POST /api/auth/2fa/verify
+ * @desc Verificar token 2FA durante login
+ * @access Público
+ */
+router.post(
+  '/2fa/verify',
+  validationSchemas.verify2FA,
+  validateRequest,
+  authController.verify2FA
+);
+
+/**
+ * @route POST /api/auth/2fa/setup
+ * @desc Configurar autenticação de dois fatores
+ * @access Privado
+ */
+router.post(
+  '/2fa/setup',
+  authenticate,
+  sensitiveRouteProtection.twoFactorSetup,
+  authController.setup2FA
+);
+
+/**
+ * @route POST /api/auth/2fa/disable
+ * @desc Desativar autenticação de dois fatores
+ * @access Privado
+ */
+router.post(
+  '/2fa/disable',
+  authenticate,
+  validationSchemas.verify2FA,
+  validateRequest,
+  authController.disable2FA
+);
+
+/**
+ * @route POST /api/auth/password-reset/request
+ * @desc Solicitar redefinição de senha
+ * @access Público
+ */
+router.post(
+  '/password-reset/request',
+  sensitiveRouteProtection.passwordReset,
+  validationSchemas.requestPasswordReset,
+  validateRequest,
+  authController.requestPasswordReset
+);
+
+/**
+ * @route POST /api/auth/password-reset/confirm
+ * @desc Confirmar redefinição de senha com token
+ * @access Público
+ */
+router.post(
+  '/password-reset/confirm',
+  validationSchemas.resetPassword,
+  validateRequest,
+  authController.resetPassword
 );
 
 module.exports = router;

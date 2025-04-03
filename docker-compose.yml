@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: development
+    container_name: mercado-digital-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - JWT_SECRET=dev_jwt_secret_replace_in_production
+      - JWT_EXPIRES_IN=1h
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - MONGODB_CLUSTER=mongodb
+      - DB_USER=mercearia_user
+      - DB_PASS=mercearia_pass
+      - DB_NAME=mercearia_digital
+      - MONGODB_APP=mercearia_digital_dev
+      - APP_KEY=dev_app_key_1234567890
+      - EMAIL_HOST=mailhog
+      - EMAIL_PORT=1025
+      - EMAIL_USER=noreply@mercearia.digital
+      - EMAIL_PASS=email_password
+      - RECAPTCHA_SECRET=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+    depends_on:
+      - mongodb
+      - mailhog
+    networks:
+      - mercearia-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: npm run dev
+
+  mongodb:
+    image: mongo:6
+    container_name: mercado-digital-mongo
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+      - MONGO_INITDB_DATABASE=mercearia_digital
+    volumes:
+      - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - mercearia-network
+    command: [--auth]
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mercado-digital-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP Server
+      - "8025:8025" # Web UI
+    networks:
+      - mercearia-network
+
+networks:
+  mercearia-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
