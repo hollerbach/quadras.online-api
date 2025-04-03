@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const config = require('../config/env.config');
 const logger = require('./logger');
-const { ApiError } = require('../middleware/errorHandler.middleware');
+const { ApiError } = require('../middlewares/errorHandler.middleware');
 
 // Modelo para tokens inválidos (blacklist)
 const TokenBlacklist = mongoose.model('TokenBlacklist', new mongoose.Schema({

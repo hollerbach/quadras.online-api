@@ -2,9 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/user.controller');
-const { authenticate } = require('../middleware/auth.middleware');
-const { authorize } = require('../middleware/rbac.middleware');
-const { validateRequest, validationSchemas } = require('../middleware/validation.middleware');
+const { authenticate } = require('../middlewares/auth.middleware');
+const { authorize } = require('../middlewares/rbac.middleware');
+const { validateRequest, validationSchemas } = require('../middlewares/validation.middleware');
 
 /**
  * @route GET /api/users/profile

@@ -1,4 +1,4 @@
-// middleware/validation.middleware.js
+// middlewares/validation.middleware.js
 const { validationResult, body } = require('express-validator');
 const { ApiError } = require('./errorHandler.middleware');
 

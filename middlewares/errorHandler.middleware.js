@@ -1,4 +1,4 @@
-// middleware/errorHandler.middleware.js
+// middlewares/errorHandler.middleware.js
 const logger = require('../services/logger');
 
 // Classe customizada de erro para a API

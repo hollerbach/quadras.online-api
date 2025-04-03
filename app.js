@@ -14,14 +14,14 @@ const {
   csrfErrorHandler,
   globalRateLimit,
   validateOrigin
-} = require('./middleware/security.middleware');
+} = require('./middlewares/security.middleware');
 
 // Middlewares de manipulação de erros
 const { 
   errorHandler, 
   unhandledPromiseRejection, 
   notFoundHandler 
-} = require('./middleware/errorHandler.middleware');
+} = require('./middlewares/errorHandler.middleware');
 
 // Rotas
 const authRoutes = require('./routes/auth.routes');

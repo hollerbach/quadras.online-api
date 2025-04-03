@@ -1,7 +1,7 @@
 // controllers/user.controller.js
 const userService = require('../services/user.service');
 const logger = require('../services/logger');
-const { ApiError } = require('../middleware/errorHandler.middleware');
+const { ApiError } = require('../middlewares/errorHandler.middleware');
 
 class UserController {
   /**

@@ -117,7 +117,7 @@ ALLOWED_ORIGINS=https://mercearia.digital
 ├── server.js            # Ponto de entrada
 ├── config/              # Configurações
 ├── controllers/         # Controladores
-├── middleware/          # Middlewares
+├── middlewares/          # Middlewares
 ├── models/              # Modelos Mongoose
 ├── routes/              # Rotas da API
 ├── services/            # Serviços

@@ -2,7 +2,7 @@
 const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
 const logger = require('./logger');
-const { ApiError } = require('../middleware/errorHandler.middleware');
+const { ApiError } = require('../middlewares/errorHandler.middleware');
 
 class TwoFactorService {
   /**

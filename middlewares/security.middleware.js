@@ -1,4 +1,4 @@
-// middleware/security.middleware.js
+// middlewares/security.middleware.js
 const csrf = require('csurf');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');

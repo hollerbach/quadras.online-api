@@ -5,7 +5,7 @@ module.exports = {
   collectCoverageFrom: [
     'controllers/**/*.js',
     'services/**/*.js',
-    'middleware/**/*.js',
+    'middlewares/**/*.js',
     'models/**/*.js',
     '!**/node_modules/**',
     '!**/tests/**',

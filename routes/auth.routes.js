@@ -4,17 +4,17 @@ const router = express.Router();
 const authController = require('../controllers/auth.controller');
 
 // Middlewares
-const { authenticate } = require('../middleware/auth.middleware');
-const { authorize } = require('../middleware/rbac.middleware');
+const { authenticate } = require('../middlewares/auth.middleware');
+const { authorize } = require('../middlewares/rbac.middleware');
 const { 
   validateRequest, 
   validationSchemas 
-} = require('../middleware/validation.middleware');
+} = require('../middlewares/validation.middleware');
 const { 
   loginRateLimit, 
   verifyAppKey, 
   sensitiveRouteProtection 
-} = require('../middleware/security.middleware');
+} = require('../middlewares/security.middleware');
 
 /**
  * @route POST /api/auth/register

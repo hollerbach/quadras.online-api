@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const User = require('../models/user.model');
 const logger = require('./logger');
-const { ApiError } = require('../middleware/errorHandler.middleware');
+const { ApiError } = require('../middlewares/errorHandler.middleware');
 const config = require('../config/env.config');
 
 class UserService {

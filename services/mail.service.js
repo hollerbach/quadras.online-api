@@ -2,7 +2,7 @@
 const nodemailer = require('nodemailer');
 const config = require('../config/env.config');
 const logger = require('./logger');
-const { ApiError } = require('../middleware/errorHandler.middleware');
+const { ApiError } = require('../middlewares/errorHandler.middleware');
 
 class MailService {
   constructor() {
