@@ -1,0 +1,130 @@
+openapi: 3.0.0
+info:
+  title: Auth API
+  version: 1.0.0
+  description: API RESTful de autenticação com verificação de e-mail e RBAC
+servers:
+  - url: http://localhost:3000/api
+
+paths:
+  /auth/register:
+    post:
+      summary: Registrar novo usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+              required: [email, password]
+      responses:
+        '201':
+          description: Usuário criado
+        '400':
+          description: E-mail já registrado
+
+  /auth/verify-email:
+    get:
+      summary: Verificar e-mail via token
+      parameters:
+        - in: query
+          name: token
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: E-mail verificado
+        '400':
+          description: Token inválido
+
+  /auth/login:
+    post:
+      summary: Autenticar usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+              required: [email, password]
+      responses:
+        '200':
+          description: Login bem-sucedido
+        '403':
+          description: Conta não verificada
+
+  /auth/logout:
+    post:
+      summary: Logout do usuário
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout realizado
+
+  /auth/password-reset/request:
+    post:
+      summary: Solicitar redefinição de senha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+              required: [email]
+      responses:
+        '200':
+          description: Token enviado por e-mail
+
+  /auth/password-reset/confirm:
+    post:
+      summary: Confirmar redefinição de senha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+              required: [token, newPassword]
+      responses:
+        '200':
+          description: Senha alterada
+
+  /auth/admin-only:
+    get:
+      summary: Acesso exclusivo para admins
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Acesso permitido
+        '403':
+          description: Acesso negado
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
