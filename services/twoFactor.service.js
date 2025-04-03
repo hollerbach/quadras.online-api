@@ -91,11 +91,30 @@ class TwoFactorService {
           return chars.charAt(Math.floor(Math.random() * chars.length));
         })
         .join('');
-        
+
       // Formatação com hífen para melhor legibilidade (ex: ABCDE-FGHIJ)
       codes.push(`${code.slice(0, 5)}-${code.slice(5)}`);
     }
     return codes;
+  }
+  // No twoFactorService.js, adicionar método para verificar código de recuperação
+  /**
+   * Verifica se um código de recuperação é válido
+   * @param {Array} recoveryCodes - Lista de códigos de recuperação
+   * @param {string} code - Código fornecido pelo usuário
+   * @returns {Object} Resultado da verificação e índice do código
+   */
+  verifyRecoveryCode(recoveryCodes, code) {
+    const normalizedCode = code.replace(/\s+/g, '').toUpperCase();
+
+    for (let i = 0; i < recoveryCodes.length; i++) {
+      const storedCode = recoveryCodes[i].code.replace(/\s+/g, '').toUpperCase();
+      if (storedCode === normalizedCode && !recoveryCodes[i].used) {
+        return { valid: true, index: i };
+      }
+    }
+
+    return { valid: false, index: -1 };
   }
 }
 
