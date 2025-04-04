@@ -4,7 +4,7 @@ const tokenService = require('../services/token.service');
 const twoFactorService = require('../services/twoFactor.service');
 const mailService = require('../services/mail.service');
 const logger = require('../services/logger');
-const { ApiError } = require('../middleware/errorHandler.middleware');
+const { ApiError } = require('../middlewares/errorHandler.middleware');
 const config = require('../config/env.config');
 const auditService = require('../services/audit.service'); // Novo serviço para logging de auditoria
 

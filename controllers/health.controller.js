@@ -2,7 +2,6 @@
 const mongoose = require('mongoose');
 const logger = require('../services/logger');
 const mailService = require('../services/mail.service');
-const cacheService = require('../services/cache.service'); // Se implementado
 
 class HealthController {
   async checkHealth(req, res) {

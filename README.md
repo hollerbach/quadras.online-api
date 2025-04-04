@@ -205,3 +205,18 @@ npm run docker:build
 ## Licença
 
 Este projeto está licenciado sob a [Licença ISC](LICENSE).
+
+
+
+Observações Importantes:
+
+Em produção, use segredos fortes e complexos para JWT_SECRET e APP_KEY. Idealmente, gere-os usando uma ferramenta de geração de strings aleatórias seguras.
+Para o MongoDB Atlas, o MONGODB_CLUSTER seria algo como cluster0.xxxx.mongodb.net.
+Para reCAPTCHA, você precisará se registrar no Google reCAPTCHA e obter suas chaves.
+Para ambiente de desenvolvimento, você pode usar o serviço Mailhog para testar emails localmente, conforme configurado no docker-compose.
+Para os valores de tempo de expiração:
+
+JWT_EXPIRES_IN: Pode ser em segundos ou unidades como 60s, 15m, 2h, 1d
+JWT_REFRESH_EXPIRES_IN: Geralmente mais longo, como 7d (7 dias)
+
+Para testar localmente com Docker, muitas dessas variáveis já estão configuradas no arquivo docker-compose.yml, mas para produção, certifique-se de definir todas elas de forma segura, idealmente usando um serviço de gerenciamento de segredos como AWS Secrets Manager, HashiCorp Vault ou similar.
