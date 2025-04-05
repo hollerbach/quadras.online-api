@@ -7,7 +7,7 @@ const config = require('./config/env.config');
 let server;
 
 // Configuração de processo
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', err => {
   logger.error('UNCAUGHT EXCEPTION! Encerrando...');
   logger.error(err.name, err.message, err.stack);
   process.exit(1);
@@ -17,10 +17,11 @@ process.on('uncaughtException', (err) => {
 const { uri, options } = config.db;
 
 // Conexão com o MongoDB
-mongoose.connect(uri, options)
+mongoose
+  .connect(uri, options)
   .then(() => {
     logger.info('✅ Conectado ao MongoDB Atlas');
-    
+
     // Iniciar servidor apenas após conexão com o banco de dados
     server = app.listen(config.app.port, () => {
       logger.info(`🚀 Server rodando na porta ${config.app.port} em modo ${config.app.env}`);
@@ -35,7 +36,7 @@ mongoose.connect(uri, options)
           logger.info('Conexão com MongoDB fechada.');
           process.exit(0);
         });
-        
+
         // Força o encerramento após 10 segundos
         setTimeout(() => {
           logger.error('Encerramento forçado após timeout!');
@@ -54,10 +55,10 @@ mongoose.connect(uri, options)
   });
 
 // Manipulação de rejeições de promises não tratadas
-process.on('unhandledRejection', (err) => {
+process.on('unhandledRejection', err => {
   logger.error('UNHANDLED REJECTION! Encerrando...');
   logger.error(err.name, err.message, err.stack);
-  
+
   // Falha graciosa em vez de abrupta
   server.close(() => {
     process.exit(1);

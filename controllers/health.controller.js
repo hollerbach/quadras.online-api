@@ -19,7 +19,7 @@ class HealthController {
         memoryUsage: process.memoryUsage()
       }
     };
-    
+
     // Verificar MongoDB
     try {
       const dbState = mongoose.connection.readyState;
@@ -27,7 +27,8 @@ class HealthController {
         status: dbState === 1 ? 'UP' : 'DOWN',
         details: {
           state: dbState,
-          stateDesc: ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown'
+          stateDesc:
+            ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown'
         }
       };
     } catch (err) {
@@ -36,16 +37,16 @@ class HealthController {
         error: err.message
       };
     }
-    
+
     // Verificar servidor de email (opcional)
     try {
       const emailCheck = await new Promise((resolve, reject) => {
-        mailService.transporter.verify((error) => {
+        mailService.transporter.verify(error => {
           if (error) reject(error);
           else resolve(true);
         });
       });
-      
+
       healthStatus.components.email = {
         status: emailCheck ? 'UP' : 'DOWN'
       };
@@ -55,13 +56,13 @@ class HealthController {
         error: err.message
       };
     }
-    
+
     // Verificar cache se implementado
     if (typeof cacheService !== 'undefined') {
       try {
         await cacheService.set('health-check', 'ok', 5);
         const testValue = await cacheService.get('health-check');
-        
+
         healthStatus.components.cache = {
           status: testValue === 'ok' ? 'UP' : 'DOWN'
         };
@@ -72,20 +73,20 @@ class HealthController {
         };
       }
     }
-    
+
     // Determinar status geral
     const criticalComponents = ['database'];
     const anyDownCritical = criticalComponents.some(
       component => healthStatus.components[component]?.status === 'DOWN'
     );
-    
+
     if (anyDownCritical) {
       healthStatus.status = 'DOWN';
       res.status(503);
     } else {
       res.status(200);
     }
-    
+
     res.json(healthStatus);
   }
 }

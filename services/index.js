@@ -23,7 +23,7 @@ module.exports = {
   tokenService: TokenService,
   twoFactorService: TwoFactorService,
   userService: UserService,
-  
+
   /**
    * Método para obter todos os serviços como um objeto único
    * Útil para injeção de dependências

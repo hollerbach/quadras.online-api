@@ -10,7 +10,7 @@ services:
     container_name: mercado-digital-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       - .:/app
       - /app/node_modules
@@ -38,10 +38,10 @@ services:
     networks:
       - mercearia-network
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'
     command: npm run dev
 
   mongodb:
@@ -56,7 +56,7 @@ services:
       - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
       - mongodb_data:/data/db
     ports:
-      - "27017:27017"
+      - '27017:27017'
     networks:
       - mercearia-network
     command: [--auth]
@@ -66,8 +66,8 @@ services:
     container_name: mercado-digital-mailhog
     restart: unless-stopped
     ports:
-      - "1025:1025" # SMTP Server
-      - "8025:8025" # Web UI
+      - '1025:1025' # SMTP Server
+      - '8025:8025' # Web UI
     networks:
       - mercearia-network
 

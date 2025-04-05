@@ -12,15 +12,20 @@ const helmetConfig = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", 'https://www.google.com/recaptcha/', 'https://www.gstatic.com/recaptcha/'],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        'https://www.google.com/recaptcha/',
+        'https://www.gstatic.com/recaptcha/'
+      ],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:'],
       connectSrc: ["'self'"],
       frameSrc: ["'self'", 'https://www.google.com/recaptcha/'],
       objectSrc: ["'none'"],
-      upgradeInsecureRequests: [],
-    },
+      upgradeInsecureRequests: []
+    }
   },
   crossOriginEmbedderPolicy: false, // Permitir incorporação de recursos de terceiros (reCAPTCHA)
   xssFilter: true,
@@ -39,7 +44,7 @@ const csrfProtection = csrf({
     key: config.security.csrf.cookie.key,
     httpOnly: config.security.csrf.cookie.httpOnly,
     sameSite: config.security.csrf.cookie.sameSite,
-    secure: config.security.csrf.cookie.secure,
+    secure: config.security.csrf.cookie.secure
   }
 });
 
@@ -88,12 +93,12 @@ const loginRateLimit = rateLimit({
  */
 const validateOrigin = (req, res, next) => {
   const origin = req.headers.origin;
-  
+
   // Se não tiver origem (como API calls diretas) ou estiver na lista de permitidos
   if (!origin || config.security.cors.allowedOrigins.includes(origin)) {
     return next();
   }
-  
+
   // Registrar tentativa de acesso não permitido
   req.logger.warn(`Tentativa de acesso CORS bloqueada: ${origin}`);
   return next(new ApiError(403, 'Origem não permitida'));
@@ -104,11 +109,11 @@ const validateOrigin = (req, res, next) => {
  */
 const verifyAppKey = (req, res, next) => {
   const appKey = req.headers['x-app-key'];
-  
+
   if (!appKey || appKey !== config.app.appKey) {
     return next(new ApiError(403, 'Chave de aplicação inválida'));
   }
-  
+
   next();
 };
 
@@ -122,7 +127,7 @@ const sensitiveRouteProtection = {
     max: 3, // 3 tentativas por hora por IP
     message: 'Muitas solicitações de redefinição de senha. Tente novamente mais tarde.'
   }),
-  
+
   // Rate limit para configuração de 2FA
   twoFactorSetup: rateLimit({
     windowMs: 24 * 60 * 60 * 1000, // 24 horas

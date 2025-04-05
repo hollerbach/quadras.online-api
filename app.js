@@ -8,20 +8,20 @@ const config = require('./config/env.config');
 const healthController = require('./controllers/health.controller');
 
 // Middlewares de segurança
-const { 
-  helmetConfig, 
-  csrfProtection, 
-  csrfToken, 
+const {
+  helmetConfig,
+  csrfProtection,
+  csrfToken,
   csrfErrorHandler,
   globalRateLimit,
   validateOrigin
 } = require('./middlewares/security.middleware');
 
 // Middlewares de manipulação de erros
-const { 
-  errorHandler, 
-  unhandledPromiseRejection, 
-  notFoundHandler 
+const {
+  errorHandler,
+  unhandledPromiseRejection,
+  notFoundHandler
 } = require('./middlewares/errorHandler.middleware');
 
 // Rotas
@@ -52,25 +52,31 @@ app.use(cookieParser()); // Parser de cookies
 app.use(unhandledPromiseRejection); // Capturar rejeições de promises não tratadas
 
 // Configuração de CORS personalizada
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || config.security.cors.allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      logger.warn(`Tentativa de acesso CORS bloqueada: ${origin}`);
-      callback(new Error('Não permitido por CORS'));
-    }
-  },
-  credentials: config.security.cors.credentials
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || config.security.cors.allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        logger.warn(`Tentativa de acesso CORS bloqueada: ${origin}`);
+        callback(new Error('Não permitido por CORS'));
+      }
+    },
+    credentials: config.security.cors.credentials
+  })
+);
 
 // Rate limiting global
 app.use(globalRateLimit);
 
 // Rotas públicas (não necessitam CSRF)
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
-  customCss: '.swagger-ui .topbar { display: none }'
-}));
+app.use(
+  '/api/docs',
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument, {
+    customCss: '.swagger-ui .topbar { display: none }'
+  })
+);
 
 // Aplicar proteção CSRF para rotas não públicas
 // Observação: CSRF não deve ser aplicado a APIs puras RESTful

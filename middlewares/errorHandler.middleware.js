@@ -18,14 +18,14 @@ const errorHandler = (err, req, res, next) => {
   // Caso contrário, assuma erro interno 500
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Erro interno do servidor';
-  
+
   // Log detalhado apenas para erros do servidor
   if (statusCode >= 500) {
     logger.error(`[${req.method}] ${req.path} >> ${err.stack}`);
   } else {
     logger.warn(`[${req.method}] ${req.path} >> ${err.message}`);
   }
-  
+
   // Resposta padronizada
   const response = {
     status: 'error',
@@ -35,7 +35,7 @@ const errorHandler = (err, req, res, next) => {
     // Incluir detalhes de validação se disponíveis
     ...(err.errors && { errors: err.errors })
   };
-  
+
   res.status(statusCode).json(response);
 };
 
@@ -45,7 +45,7 @@ const unhandledPromiseRejection = (req, res, next) => {
     logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
     throw reason;
   });
-  
+
   next();
 };
 

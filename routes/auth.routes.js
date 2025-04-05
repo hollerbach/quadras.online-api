@@ -6,10 +6,7 @@ const authController = require('../controllers/auth.controller');
 // Middlewares
 const { authenticate } = require('../middlewares/auth.middleware');
 const { authorize } = require('../middlewares/rbac.middleware');
-const {
-  validateRequest,
-  validationSchemas
-} = require('../middlewares/validation.middleware');
+const { validateRequest, validationSchemas } = require('../middlewares/validation.middleware');
 const {
   loginRateLimit,
   verifyAppKey,
@@ -21,22 +18,14 @@ const {
  * @desc Registrar novo usuário
  * @access Público
  */
-router.post(
-  '/register',
-  validationSchemas.register,
-  validateRequest,
-  authController.register
-);
+router.post('/register', validationSchemas.register, validateRequest, authController.register);
 
 /**
  * @route GET /api/auth/verify-email
  * @desc Verificar e-mail via token
  * @access Público
  */
-router.get(
-  '/verify-email',
-  authController.verifyEmail
-);
+router.get('/verify-email', authController.verifyEmail);
 
 /**
  * @route POST /api/auth/login
@@ -57,33 +46,21 @@ router.post(
  * @desc Atualizar tokens usando refresh token
  * @access Público
  */
-router.post(
-  '/refresh-token',
-  authController.refreshToken
-);
+router.post('/refresh-token', authController.refreshToken);
 
 /**
  * @route POST /api/auth/logout
  * @desc Logout e invalidação de tokens
  * @access Privado
  */
-router.post(
-  '/logout',
-  authenticate,
-  authController.logout
-);
+router.post('/logout', authenticate, authController.logout);
 
 /**
  * @route POST /api/auth/2fa/verify
  * @desc Verificar token 2FA durante login
  * @access Público
  */
-router.post(
-  '/2fa/verify',
-  validationSchemas.verify2FA,
-  validateRequest,
-  authController.verify2FA
-);
+router.post('/2fa/verify', validationSchemas.verify2FA, validateRequest, authController.verify2FA);
 
 /**
  * @route POST /api/auth/2fa/setup

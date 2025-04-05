@@ -37,7 +37,7 @@ module.exports = {
     appKey: process.env.APP_KEY,
     baseUrl: process.env.BASE_URL || 'http://localhost:3000'
   },
-  
+
   db: {
     uri: `mongodb+srv://${encodeURIComponent(process.env.DB_USER)}:${encodeURIComponent(process.env.DB_PASS)}@${process.env.MONGODB_CLUSTER}/${process.env.DB_NAME}?retryWrites=true&w=majority&appName=${process.env.MONGODB_APP}`,
     options: {
@@ -45,7 +45,7 @@ module.exports = {
       // Como retryWrites, w, etc. se você precisar delas
     }
   },
-  
+
   auth: {
     jwt: {
       secret: process.env.JWT_SECRET,
@@ -64,7 +64,7 @@ module.exports = {
       tokenExpiry: 30 * 60 * 1000 // 30 minutos
     }
   },
-  
+
   email: {
     host: process.env.EMAIL_HOST,
     port: parseInt(process.env.EMAIL_PORT, 10),
@@ -75,7 +75,7 @@ module.exports = {
     },
     from: `"Mercearia Digital" <${process.env.EMAIL_USER}>`
   },
-  
+
   security: {
     cors: {
       allowedOrigins: (process.env.ALLOWED_ORIGINS || 'https://mercearia.digital').split(','),

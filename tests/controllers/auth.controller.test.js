@@ -23,21 +23,19 @@ describe('Auth Controller', () => {
         role: 'user'
       };
 
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData);
+      const response = await request(app).post('/api/auth/register').send(userData);
 
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty('message');
       expect(response.body).toHaveProperty('user');
       expect(response.body.user.email).toBe(userData.email);
-      
+
       // Verificar se o usuário foi salvo no banco
       const user = await User.findOne({ email: userData.email });
       expect(user).toBeTruthy();
       expect(user.verified).toBe(false);
       expect(user.verifyToken).toBeTruthy();
-      
+
       // Verificar se o e-mail foi enviado
       expect(mailService.sendVerificationEmail).toHaveBeenCalledWith(
         userData.email,
@@ -58,9 +56,7 @@ describe('Auth Controller', () => {
         password: 'Test@123456'
       };
 
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData);
+      const response = await request(app).post('/api/auth/register').send(userData);
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('message');
@@ -73,9 +69,7 @@ describe('Auth Controller', () => {
         password: '123' // senha muito curta
       };
 
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send(userData);
+      const response = await request(app).post('/api/auth/register').send(userData);
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('errors');
@@ -125,7 +119,7 @@ describe('Auth Controller', () => {
       expect(response.body).toHaveProperty('accessToken');
       expect(response.body).toHaveProperty('user');
       expect(response.body.user.email).toBe('user@example.com');
-      
+
       // Verificar cookie de refresh token
       expect(response.headers['set-cookie']).toBeDefined();
       expect(response.headers['set-cookie'][0]).toContain('refreshToken');
@@ -202,15 +196,14 @@ describe('Auth Controller', () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('message');
       expect(response.body.message).toContain('Logout realizado com sucesso');
-      
+
       // Verificar se o cookie foi limpo
       expect(response.headers['set-cookie']).toBeDefined();
       expect(response.headers['set-cookie'][0]).toContain('refreshToken=;');
     });
 
     it('deve retornar erro para logout sem autenticação', async () => {
-      const response = await request(app)
-        .post('/api/auth/logout');
+      const response = await request(app).post('/api/auth/logout');
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('message');
@@ -229,20 +222,18 @@ describe('Auth Controller', () => {
     });
 
     it('deve solicitar redefinição de senha com sucesso', async () => {
-      const response = await request(app)
-        .post('/api/auth/password-reset/request')
-        .send({
-          email: 'reset@example.com'
-        });
+      const response = await request(app).post('/api/auth/password-reset/request').send({
+        email: 'reset@example.com'
+      });
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('message');
-      
+
       // Verificar se o usuário foi atualizado com token de redefinição
       const user = await User.findOne({ email: 'reset@example.com' });
       expect(user.resetToken).toBeTruthy();
       expect(user.resetTokenExpires).toBeTruthy();
-      
+
       // Verificar se o e-mail foi enviado
       expect(mailService.sendResetPasswordEmail).toHaveBeenCalledWith(
         'reset@example.com',
@@ -251,11 +242,9 @@ describe('Auth Controller', () => {
     });
 
     it('não deve revelar se o e-mail existe ou não', async () => {
-      const response = await request(app)
-        .post('/api/auth/password-reset/request')
-        .send({
-          email: 'nonexistent@example.com'
-        });
+      const response = await request(app).post('/api/auth/password-reset/request').send({
+        email: 'nonexistent@example.com'
+      });
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('message');

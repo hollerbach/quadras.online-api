@@ -7,26 +7,32 @@ const logger = require('./logger');
 const { ApiError } = require('../middlewares/errorHandler.middleware');
 
 // Modelo para tokens inválidos (blacklist)
-const TokenBlacklist = mongoose.model('TokenBlacklist', new mongoose.Schema({
-  token: { type: String, required: true, index: true },
-  type: { type: String, enum: ['access', 'refresh'], required: true },
-  expires: { type: Date, required: true },
-  createdAt: { type: Date, default: Date.now, expires: '30d' }
-}));
+const TokenBlacklist = mongoose.model(
+  'TokenBlacklist',
+  new mongoose.Schema({
+    token: { type: String, required: true, index: true },
+    type: { type: String, enum: ['access', 'refresh'], required: true },
+    expires: { type: Date, required: true },
+    createdAt: { type: Date, default: Date.now, expires: '30d' }
+  })
+);
 
 // Modelo para refresh tokens
-const RefreshToken = mongoose.model('RefreshToken', new mongoose.Schema({
-  token: { type: String, required: true, unique: true },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  userEmail: { type: String, required: true },
-  expires: { type: Date, required: true },
-  revoked: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now },
-  createdByIp: String,
-  revokedAt: Date,
-  revokedByIp: String,
-  replacedByToken: String
-}));
+const RefreshToken = mongoose.model(
+  'RefreshToken',
+  new mongoose.Schema({
+    token: { type: String, required: true, unique: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    userEmail: { type: String, required: true },
+    expires: { type: Date, required: true },
+    revoked: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now },
+    createdByIp: String,
+    revokedAt: Date,
+    revokedByIp: String,
+    replacedByToken: String
+  })
+);
 
 class TokenService {
   /**
@@ -61,7 +67,7 @@ class TokenService {
     // Criar um token aleatório seguro
     const token = crypto.randomBytes(40).toString('hex');
     const expires = new Date(Date.now() + parseInt(config.auth.jwt.refreshExpiresIn) * 1000);
-    
+
     // Salvar no banco de dados
     const refreshToken = await RefreshToken.create({
       token,
@@ -70,7 +76,7 @@ class TokenService {
       expires,
       createdByIp: ipAddress
     });
-    
+
     return refreshToken.toObject();
   }
 
@@ -106,7 +112,7 @@ class TokenService {
    */
   async blacklistToken(token, type, expiresIn) {
     const expires = new Date(Date.now() + expiresIn * 1000);
-    
+
     const blacklistedToken = await TokenBlacklist.create({
       token,
       type,
@@ -125,19 +131,19 @@ class TokenService {
    */
   async revokeRefreshToken(token, ipAddress) {
     const refreshToken = await RefreshToken.findOne({ token });
-    
+
     if (!refreshToken || refreshToken.revoked) {
       throw new ApiError(400, 'Token inválido ou já revogado');
     }
-    
+
     // Marcar como revogado
     refreshToken.revoked = true;
     refreshToken.revokedAt = Date.now();
     refreshToken.revokedByIp = ipAddress;
-    
+
     await refreshToken.save();
     logger.info(`Refresh token revogado: ${token.substring(0, 10)}...`);
-    
+
     return refreshToken;
   }
 
@@ -148,35 +154,35 @@ class TokenService {
    * @returns {Promise<Object>} Novos tokens gerados
    */
   async refreshTokens(token, ipAddress) {
-    const refreshToken = await RefreshToken.findOne({ 
-      token, 
+    const refreshToken = await RefreshToken.findOne({
+      token,
       revoked: false,
       expires: { $gt: new Date() }
     });
-    
+
     if (!refreshToken) {
       throw new ApiError(401, 'Token inválido, expirado ou revogado');
     }
-    
+
     // Gerar novo refresh token
     const newRefreshToken = await this.generateRefreshToken(
       { _id: refreshToken.userId, email: refreshToken.userEmail },
       ipAddress
     );
-    
+
     // Revogar o token anterior
     refreshToken.revoked = true;
     refreshToken.revokedAt = Date.now();
     refreshToken.revokedByIp = ipAddress;
     refreshToken.replacedByToken = newRefreshToken.token;
     await refreshToken.save();
-    
+
     // Gerar novo token de acesso
     const accessToken = this.generateAccessToken({
       id: refreshToken.userId,
       email: refreshToken.userEmail
     });
-    
+
     return {
       accessToken,
       refreshToken: newRefreshToken.token

@@ -15,9 +15,10 @@ class MailService {
         pass: config.email.auth.pass
       }
     });
-    
+
     // Verificar conexão com serviço de email
-    this.transporter.verify()
+    this.transporter
+      .verify()
       .then(() => logger.info('Conexão com servidor de email estabelecida'))
       .catch(err => logger.error(`Erro ao conectar com servidor de email: ${err.message}`));
   }
@@ -33,7 +34,7 @@ class MailService {
         from: config.email.from,
         ...mailOptions
       });
-      
+
       logger.info(`Email enviado: ${info.messageId} para ${mailOptions.to}`);
       return info;
     } catch (error) {
@@ -49,7 +50,7 @@ class MailService {
    */
   async sendVerificationEmail(to, token) {
     const verificationUrl = `${config.app.baseUrl}/api/auth/verify-email?token=${token}`;
-    
+
     const mailOptions = {
       to,
       subject: 'Confirme seu cadastro na Mercearia Digital',
@@ -86,7 +87,7 @@ class MailService {
         Se você não solicitou este cadastro, por favor ignore este e-mail.
       `
     };
-    
+
     return await this.sendMail(mailOptions);
   }
 
@@ -97,7 +98,7 @@ class MailService {
    */
   async sendResetPasswordEmail(to, token) {
     const resetUrl = `${config.app.baseUrl}/reset-password?token=${token}`;
-    
+
     const mailOptions = {
       to,
       subject: 'Redefinição de senha - Mercearia Digital',
@@ -134,7 +135,7 @@ class MailService {
         Se você não solicitou esta redefinição, por favor ignore este e-mail ou entre em contato conosco se tiver alguma dúvida.
       `
     };
-    
+
     return await this.sendMail(mailOptions);
   }
 
@@ -144,12 +145,12 @@ class MailService {
    * @param {Array<string>} recoveryCodes - Códigos de recuperação
    */
   async sendRecoveryCodes(to, recoveryCodes) {
-    const codesHtml = recoveryCodes.map(code => 
-      `<li style="font-family: monospace; margin: 5px 0;">${code}</li>`
-    ).join('');
-    
+    const codesHtml = recoveryCodes
+      .map(code => `<li style="font-family: monospace; margin: 5px 0;">${code}</li>`)
+      .join('');
+
     const codesText = recoveryCodes.join('\n');
-    
+
     const mailOptions = {
       to,
       subject: 'Seus códigos de recuperação 2FA - Mercearia Digital',
@@ -185,7 +186,7 @@ class MailService {
         Se você não solicitou a ativação de 2FA, por favor entre em contato conosco imediatamente.
       `
     };
-    
+
     return await this.sendMail(mailOptions);
   }
 }

@@ -78,8 +78,13 @@ class UserService {
 
     // Aplicar atualizações
     Object.keys(updates).forEach(key => {
-      if (key !== 'password' && key !== 'role' && key !== 'verified'
-        && key !== 'twoFactorEnabled' && key !== 'twoFactorSecret') {
+      if (
+        key !== 'password' &&
+        key !== 'role' &&
+        key !== 'verified' &&
+        key !== 'twoFactorEnabled' &&
+        key !== 'twoFactorSecret'
+      ) {
         user[key] = updates[key];
       }
     });

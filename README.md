@@ -5,6 +5,7 @@ Backend para o sistema de autenticação da Mercearia Digital, com suporte a aut
 ## Características
 
 - **Autenticação Segura**
+
   - JWT (Access Token + Refresh Token)
   - Autenticação em Dois Fatores (2FA) com TOTP
   - Rate limiting para proteção contra ataques de força bruta
@@ -12,6 +13,7 @@ Backend para o sistema de autenticação da Mercearia Digital, com suporte a aut
   - Redefinição de senha segura
 
 - **Segurança**
+
   - Proteção contra CSRF
   - Configurações de segurança com Helmet (CSP, XSS, etc.)
   - Blacklist de tokens
@@ -19,6 +21,7 @@ Backend para o sistema de autenticação da Mercearia Digital, com suporte a aut
   - Validação de entrada rigorosa
 
 - **Arquitetura**
+
   - Padrão MVC
   - Separação clara de responsabilidades
   - Injeção de dependências
@@ -26,6 +29,7 @@ Backend para o sistema de autenticação da Mercearia Digital, com suporte a aut
   - Classes ES6 para organização do código
 
 - **Documentação**
+
   - API documentada com Swagger/OpenAPI
   - Código bem documentado com JSDoc
 
@@ -128,25 +132,25 @@ ALLOWED_ORIGINS=https://mercearia.digital
 
 ## API Endpoints
 
-| Método | Endpoint                         | Descrição                         |
-|--------|----------------------------------|-----------------------------------|
-| POST   | /api/auth/register               | Registrar novo usuário            |
-| GET    | /api/auth/verify-email           | Verificar e-mail                  |
-| POST   | /api/auth/login                  | Login de usuário                  |
-| POST   | /api/auth/refresh-token          | Renovar tokens                    |
-| POST   | /api/auth/logout                 | Logout (invalidar tokens)         |
-| POST   | /api/auth/2fa/setup              | Configurar 2FA                    |
-| POST   | /api/auth/2fa/verify             | Verificar token 2FA               |
-| POST   | /api/auth/2fa/disable            | Desativar 2FA                     |
-| POST   | /api/auth/password-reset/request | Solicitar redefinição de senha    |
-| POST   | /api/auth/password-reset/confirm | Confirmar redefinição de senha    |
-| GET    | /api/users/profile               | Obter perfil do usuário           |
-| PUT    | /api/users/profile               | Atualizar perfil                  |
-| PUT    | /api/users/password              | Alterar senha                     |
-| GET    | /api/users                       | Listar usuários (admin)           |
-| GET    | /api/users/:id                   | Obter usuário por ID (admin)      |
-| PUT    | /api/users/:id                   | Atualizar usuário (admin)         |
-| DELETE | /api/users/:id                   | Desativar usuário (admin)         |
+| Método | Endpoint                         | Descrição                      |
+| ------ | -------------------------------- | ------------------------------ |
+| POST   | /api/auth/register               | Registrar novo usuário         |
+| GET    | /api/auth/verify-email           | Verificar e-mail               |
+| POST   | /api/auth/login                  | Login de usuário               |
+| POST   | /api/auth/refresh-token          | Renovar tokens                 |
+| POST   | /api/auth/logout                 | Logout (invalidar tokens)      |
+| POST   | /api/auth/2fa/setup              | Configurar 2FA                 |
+| POST   | /api/auth/2fa/verify             | Verificar token 2FA            |
+| POST   | /api/auth/2fa/disable            | Desativar 2FA                  |
+| POST   | /api/auth/password-reset/request | Solicitar redefinição de senha |
+| POST   | /api/auth/password-reset/confirm | Confirmar redefinição de senha |
+| GET    | /api/users/profile               | Obter perfil do usuário        |
+| PUT    | /api/users/profile               | Atualizar perfil               |
+| PUT    | /api/users/password              | Alterar senha                  |
+| GET    | /api/users                       | Listar usuários (admin)        |
+| GET    | /api/users/:id                   | Obter usuário por ID (admin)   |
+| PUT    | /api/users/:id                   | Atualizar usuário (admin)      |
+| DELETE | /api/users/:id                   | Desativar usuário (admin)      |
 
 ## Documentação da API
 
@@ -205,8 +209,6 @@ npm run docker:build
 ## Licença
 
 Este projeto está licenciado sob a [Licença ISC](LICENSE).
-
-
 
 Observações Importantes:
 

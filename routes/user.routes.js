@@ -11,11 +11,7 @@ const { validateRequest, validationSchemas } = require('../middlewares/validatio
  * @desc Obter perfil do usuário atual
  * @access Privado
  */
-router.get(
-  '/profile',
-  authenticate,
-  userController.getProfile
-);
+router.get('/profile', authenticate, userController.getProfile);
 
 /**
  * @route PUT /api/users/profile
@@ -48,24 +44,14 @@ router.put(
  * @desc Listar todos os usuários (somente admin)
  * @access Privado/Admin
  */
-router.get(
-  '/',
-  authenticate,
-  authorize(['admin']),
-  userController.getAllUsers
-);
+router.get('/', authenticate, authorize(['admin']), userController.getAllUsers);
 
 /**
  * @route GET /api/users/:id
  * @desc Obter usuário por ID (somente admin)
  * @access Privado/Admin
  */
-router.get(
-  '/:id',
-  authenticate,
-  authorize(['admin']),
-  userController.getUserById
-);
+router.get('/:id', authenticate, authorize(['admin']), userController.getUserById);
 
 /**
  * @route PUT /api/users/:id
@@ -86,11 +72,6 @@ router.put(
  * @desc Desativar usuário por ID (somente admin)
  * @access Privado/Admin
  */
-router.delete(
-  '/:id',
-  authenticate,
-  authorize(['admin']),
-  userController.deactivateUser
-);
+router.delete('/:id', authenticate, authorize(['admin']), userController.deactivateUser);
 
 module.exports = router;

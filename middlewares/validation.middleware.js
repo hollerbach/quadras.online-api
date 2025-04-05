@@ -19,47 +19,33 @@ const validateRequest = (req, res, next) => {
 // Esquemas de validação para diferentes rotas
 const validationSchemas = {
   register: [
-    body('email')
-      .isEmail()
-      .withMessage('E-mail inválido')
-      .normalizeEmail(),
+    body('email').isEmail().withMessage('E-mail inválido').normalizeEmail(),
     body('password')
       .isLength({ min: 8 })
       .withMessage('Senha deve ter pelo menos 8 caracteres')
       .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
-      .withMessage('Senha deve conter pelo menos uma letra maiúscula, uma minúscula, um número e um caractere especial'),
-    body('role')
-      .optional()
-      .isIn(['user', 'admin'])
-      .withMessage('Função inválida')
+      .withMessage(
+        'Senha deve conter pelo menos uma letra maiúscula, uma minúscula, um número e um caractere especial'
+      ),
+    body('role').optional().isIn(['user', 'admin']).withMessage('Função inválida')
   ],
 
   login: [
-    body('email')
-      .isEmail()
-      .withMessage('E-mail inválido')
-      .normalizeEmail(),
-    body('password')
-      .notEmpty()
-      .withMessage('Senha é obrigatória')
+    body('email').isEmail().withMessage('E-mail inválido').normalizeEmail(),
+    body('password').notEmpty().withMessage('Senha é obrigatória')
   ],
 
-  requestPasswordReset: [
-    body('email')
-      .isEmail()
-      .withMessage('E-mail inválido')
-      .normalizeEmail()
-  ],
+  requestPasswordReset: [body('email').isEmail().withMessage('E-mail inválido').normalizeEmail()],
 
   resetPassword: [
-    body('token')
-      .notEmpty()
-      .withMessage('Token é obrigatório'),
+    body('token').notEmpty().withMessage('Token é obrigatório'),
     body('newPassword')
       .isLength({ min: 8 })
       .withMessage('Nova senha deve ter pelo menos 8 caracteres')
       .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
-      .withMessage('Senha deve conter pelo menos uma letra maiúscula, uma minúscula, um número e um caractere especial')
+      .withMessage(
+        'Senha deve conter pelo menos uma letra maiúscula, uma minúscula, um número e um caractere especial'
+      )
   ],
 
   updateProfile: [
@@ -78,22 +64,15 @@ const validationSchemas = {
       .isLength({ min: 8 })
       .withMessage('Nova senha deve ter pelo menos 8 caracteres')
       .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
-      .withMessage('Senha deve conter pelo menos uma letra maiúscula, uma minúscula, um número e um caractere especial')
+      .withMessage(
+        'Senha deve conter pelo menos uma letra maiúscula, uma minúscula, um número e um caractere especial'
+      )
   ],
 
   adminUpdateUser: [
-    body('role')
-      .optional()
-      .isIn(['user', 'admin'])
-      .withMessage('Função inválida'),
-    body('verified')
-      .optional()
-      .isBoolean()
-      .withMessage('O campo verified deve ser um booleano'),
-    body('active')
-      .optional()
-      .isBoolean()
-      .withMessage('O campo active deve ser um booleano'),
+    body('role').optional().isIn(['user', 'admin']).withMessage('Função inválida'),
+    body('verified').optional().isBoolean().withMessage('O campo verified deve ser um booleano'),
+    body('active').optional().isBoolean().withMessage('O campo active deve ser um booleano'),
     body('twoFactorEnabled')
       .optional()
       .isBoolean()
@@ -114,9 +93,7 @@ const validationSchemas = {
       .withMessage('Código de recuperação é obrigatório')
       .isString()
       .withMessage('Código de recuperação deve ser uma string'),
-    body('tempToken')
-      .notEmpty()
-      .withMessage('Token temporário é obrigatório')
+    body('tempToken').notEmpty().withMessage('Token temporário é obrigatório')
   ]
 };
 
