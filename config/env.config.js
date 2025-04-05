@@ -41,8 +41,8 @@ module.exports = {
   db: {
     uri: `mongodb+srv://${encodeURIComponent(process.env.DB_USER)}:${encodeURIComponent(process.env.DB_PASS)}@${process.env.MONGODB_CLUSTER}/${process.env.DB_NAME}?retryWrites=true&w=majority&appName=${process.env.MONGODB_APP}`,
     options: {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
+      // Manter apenas opções específicas necessárias para seu caso de uso
+      // Como retryWrites, w, etc. se você precisar delas
     }
   },
   

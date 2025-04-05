@@ -106,6 +106,17 @@ const validationSchemas = {
       .withMessage('Token deve conter apenas números')
       .isLength({ min: 6, max: 6 })
       .withMessage('Token deve ter 6 dígitos')
+  ],
+
+  recoveryCode: [
+    body('code')
+      .notEmpty()
+      .withMessage('Código de recuperação é obrigatório')
+      .isString()
+      .withMessage('Código de recuperação deve ser uma string'),
+    body('tempToken')
+      .notEmpty()
+      .withMessage('Token temporário é obrigatório')
   ]
 };
 

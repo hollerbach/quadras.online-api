@@ -143,7 +143,6 @@ userSchema.pre('save', function(next) {
 });
 
 // Índices para melhorar performance de consultas
-userSchema.index({ email: 1 });
 userSchema.index({ verifyToken: 1 }, { sparse: true });
 userSchema.index({ resetToken: 1 }, { sparse: true });
 userSchema.index({ role: 1 });
