@@ -20,7 +20,6 @@ const {
 // Middlewares de manipulação de erros
 const {
   errorHandler,
-  unhandledPromiseRejection,
   notFoundHandler
 } = require('./middlewares/errorHandler.middleware');
 
@@ -49,7 +48,7 @@ app.use(helmetConfig); // Configurações de segurança para cabeçalhos HTTP
 app.use(express.json()); // Parser de corpo JSON
 app.use(express.urlencoded({ extended: true })); // Parser de corpo de formulário
 app.use(cookieParser()); // Parser de cookies
-app.use(unhandledPromiseRejection); // Capturar rejeições de promises não tratadas
+// app.use(unhandledPromiseRejection); // Capturar rejeições de promises não tratadas
 
 // Configuração de CORS personalizada
 app.use(
