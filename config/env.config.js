@@ -1,22 +1,26 @@
 // config/env.config.js
 const logger = require('../services/logger');
 
-// Lista de variáveis de ambiente obrigatórias
+// Lista de variáveis de ambiente obrigatórias em produção
 const requiredEnvVars = [
   'JWT_SECRET',
   'JWT_EXPIRES_IN',
   'JWT_REFRESH_EXPIRES_IN',
-  'DB_USER',
-  'DB_PASS',
-  'DB_NAME',
-  'MONGODB_CLUSTER',
-  'MONGODB_APP',
   'EMAIL_HOST',
   'EMAIL_PORT',
   'EMAIL_USER',
   'EMAIL_PASS',
   'RECAPTCHA_SECRET',
-  'APP_KEY'
+  'APP_KEY',
+  'DB_NAME',
+  'MONGODB_CLUSTER'
+];
+
+// Lista de variáveis de banco de dados que são opcionais em desenvolvimento
+const dbEnvVars = [
+  'DB_USER',
+  'DB_PASS',
+  'MONGODB_APP'
 ];
 
 // Verificar variáveis obrigatórias
@@ -29,26 +33,48 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
+// Verificar variáveis de banco de dados
+for (const envVar of dbEnvVars) {
+  if (!process.env[envVar]) {
+    logger.warn(`Variável de ambiente ${envVar} não definida`);
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(`Variável de ambiente ${envVar} não definida`);
+    }
+  }
+}
+
+// Valores padrão para ambiente de desenvolvimento
+const getMongoURI = () => {
+  // Se estamos em desenvolvimento e faltam credenciais, usamos uma conexão local
+  if (process.env.NODE_ENV !== 'production' && 
+     (!process.env.DB_USER || !process.env.DB_PASS || !process.env.MONGODB_CLUSTER)) {
+    logger.info('Usando conexão MongoDB local para ambiente de desenvolvimento');
+    return `mongodb://localhost:27017/${process.env.DB_NAME || 'mercearia_dev'}`;
+  }
+  
+  // Caso contrário, usamos a conexão Atlas com credenciais
+  return `mongodb+srv://${encodeURIComponent(process.env.DB_USER)}:${encodeURIComponent(process.env.DB_PASS)}@${process.env.MONGODB_CLUSTER}/${process.env.DB_NAME}?retryWrites=true&w=majority${process.env.MONGODB_APP ? `&appName=${process.env.MONGODB_APP}` : ''}`;
+};
+
 // Configurações organizadas por contexto
 module.exports = {
   app: {
     env: process.env.NODE_ENV || 'development',
     port: process.env.PORT || 3000,
-    appKey: process.env.APP_KEY,
+    appKey: process.env.APP_KEY || 'dev_app_key_default',
     baseUrl: process.env.BASE_URL || 'http://localhost:3000'
   },
 
   db: {
-    uri: `mongodb+srv://${encodeURIComponent(process.env.DB_USER)}:${encodeURIComponent(process.env.DB_PASS)}@${process.env.MONGODB_CLUSTER}/${process.env.DB_NAME}?retryWrites=true&w=majority&appName=${process.env.MONGODB_APP}`,
+    uri: getMongoURI(),
     options: {
-      // Manter apenas opções específicas necessárias para seu caso de uso
-      // Como retryWrites, w, etc. se você precisar delas
+      // Opções de conexão podem ser definidas aqui se necessário
     }
   },
 
   auth: {
     jwt: {
-      secret: process.env.JWT_SECRET,
+      secret: process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev_jwt_secret' : undefined),
       expiresIn: process.env.JWT_EXPIRES_IN || '1h',
       refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
     },
@@ -78,7 +104,7 @@ module.exports = {
 
   security: {
     cors: {
-      allowedOrigins: (process.env.ALLOWED_ORIGINS || 'https://mercearia.digital').split(','),
+      allowedOrigins: (process.env.ALLOWED_ORIGINS || 'https://mercearia.digital,http://localhost:3000').split(','),
       credentials: true
     },
     rateLimit: {

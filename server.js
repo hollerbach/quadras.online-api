@@ -1,5 +1,12 @@
 // server.js
-require('dotenv').config();
+const path = require('path');
+const envFile = process.env.NODE_ENV === 'production' ? '.env' : '.env.local';
+
+// Carrega as variáveis do arquivo apropriado (.env.local para desenvolvimento)
+require('dotenv').config({
+  path: path.resolve(process.cwd(), envFile)
+});
+
 const app = require('./app');
 const mongoose = require('mongoose');
 const logger = require('./services/logger');
@@ -20,11 +27,12 @@ const { uri, options } = config.db;
 mongoose
   .connect(uri, options)
   .then(() => {
-    logger.info('✅ Conectado ao MongoDB Atlas');
+    logger.info(`✅ Conectado ao MongoDB: ${uri.split('@')[1]}`); // Exibe a URI sem as credenciais
 
     // Iniciar servidor apenas após conexão com o banco de dados
     server = app.listen(config.app.port, () => {
       logger.info(`🚀 Server rodando na porta ${config.app.port} em modo ${config.app.env}`);
+      logger.info(`🌐 Usando arquivo de configuração: ${envFile}`);
     });
 
     // Manipulação graciosa de desligamento
@@ -50,7 +58,7 @@ mongoose
     process.on('SIGINT', shutdown);
   })
   .catch(err => {
-    logger.error('❌ Erro ao conectar ao MongoDB Atlas:', err.message);
+    logger.error('❌ Erro ao conectar ao MongoDB:', err.message);
     process.exit(1);
   });
 
