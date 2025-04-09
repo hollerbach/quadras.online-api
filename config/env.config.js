@@ -1,4 +1,4 @@
-// config/env.config.js
+// config/env.config.js (atualizado com configurações OAuth)
 const logger = require('../services/logger');
 
 // Lista de variáveis de ambiente obrigatórias em produção
@@ -23,6 +23,13 @@ const dbEnvVars = [
   'MONGODB_APP'
 ];
 
+// Lista de variáveis OAuth que são opcionais em desenvolvimento
+const oauthEnvVars = [
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'OAUTH_REDIRECT_URL'
+];
+
 // Verificar variáveis obrigatórias
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
@@ -40,6 +47,13 @@ for (const envVar of dbEnvVars) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error(`Variável de ambiente ${envVar} não definida`);
     }
+  }
+}
+
+// Verificar variáveis OAuth
+for (const envVar of oauthEnvVars) {
+  if (!process.env[envVar]) {
+    logger.warn(`Variável de ambiente OAuth ${envVar} não definida. Funcionalidades OAuth podem não funcionar corretamente.`);
   }
 }
 
@@ -89,6 +103,15 @@ module.exports = {
     verification: {
       tokenExpiry: 30 * 60 * 1000 // 30 minutos
     }
+  },
+
+  // Novas configurações para OAuth
+  oauth: {
+    google: {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET
+    },
+    redirectUrl: process.env.OAUTH_REDIRECT_URL || 'http://localhost:3000/auth/callback'
   },
 
   email: {

@@ -1,7 +1,9 @@
-// routes/auth.routes.js
+// routes/auth.routes.js (atualizado com rotas OAuth)
 const express = require('express');
 const router = express.Router();
+const passport = require('passport'); // Adicionar importação do passport
 const authController = require('../controllers/auth.controller');
+const oauthController = require('../controllers/oauth.controller'); // Novo controlador
 
 // Middlewares
 const { authenticate } = require('../middlewares/auth.middleware');
@@ -112,7 +114,6 @@ router.post(
   authController.resetPassword
 );
 
-// Em auth.routes.js
 /**
  * @route POST /api/auth/2fa/recovery
  * @desc Login usando código de recuperação 2FA
@@ -124,5 +125,28 @@ router.post(
   validateRequest,
   authController.verify2FARecovery
 );
+
+// NOVAS ROTAS DE AUTENTICAÇÃO OAUTH
+
+/**
+ * @route GET /api/auth/google
+ * @desc Iniciar autenticação com Google
+ * @access Público
+ */
+router.get('/google', oauthController.googleAuth);
+
+/**
+ * @route GET /api/auth/google/callback
+ * @desc Callback de autenticação Google
+ * @access Público
+ */
+router.get('/google/callback', oauthController.googleCallback);
+
+/**
+ * @route POST /api/auth/google/unlink
+ * @desc Desvincular conta do Google
+ * @access Privado
+ */
+router.post('/google/unlink', authenticate, oauthController.unlinkGoogle);
 
 module.exports = router;
