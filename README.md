@@ -1,6 +1,6 @@
 # Mercearia Digital API
 
-Backend para o sistema de autenticação da Mercearia Digital, com suporte a autenticação em dois fatores, verificação de e-mail, RBAC e todas as melhores práticas de segurança.
+Backend para o sistema de autenticação da Mercearia Digital, com suporte a autenticação em dois fatores, verificação de e-mail, OAuth 2.0, RBAC e todas as melhores práticas de segurança.
 
 ## Características
 
@@ -8,6 +8,7 @@ Backend para o sistema de autenticação da Mercearia Digital, com suporte a aut
 
   - JWT (Access Token + Refresh Token)
   - Autenticação em Dois Fatores (2FA) com TOTP
+  - OAuth 2.0 com Google
   - Rate limiting para proteção contra ataques de força bruta
   - Verificação de e-mail
   - Redefinição de senha segura
@@ -89,6 +90,8 @@ Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis:
 # Ambiente
 NODE_ENV=development
 PORT=3000
+BASE_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173
 
 # JWT
 JWT_SECRET=seu_jwt_secret_seguro
@@ -111,8 +114,24 @@ EMAIL_PASS=sua_senha_email
 # Segurança
 APP_KEY=sua_chave_app_segura
 RECAPTCHA_SECRET=seu_recaptcha_secret
-ALLOWED_ORIGINS=https://mercearia.digital
+ALLOWED_ORIGINS=https://mercearia.digital,http://localhost:5173
+
+# OAuth
+GOOGLE_CLIENT_ID=seu_google_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=seu_google_client_secret
 ```
+
+## Configuração OAuth 2.0
+
+Para habilitar o login com Google:
+
+1. Acesse o [Google Cloud Console](https://console.cloud.google.com/)
+2. Crie um novo projeto
+3. Configure a tela de consentimento OAuth
+4. Crie credenciais OAuth 2.0 (ID do cliente)
+5. Adicione as origens JavaScript autorizadas (ex: http://localhost:3000)
+6. Adicione URIs de redirecionamento (ex: http://localhost:3000/api/auth/google/callback)
+7. Copie o ID do cliente e o segredo para as variáveis de ambiente
 
 ## Estrutura do Projeto
 
@@ -121,7 +140,7 @@ ALLOWED_ORIGINS=https://mercearia.digital
 ├── server.js            # Ponto de entrada
 ├── config/              # Configurações
 ├── controllers/         # Controladores
-├── middlewares/          # Middlewares
+├── middlewares/         # Middlewares
 ├── models/              # Modelos Mongoose
 ├── routes/              # Rotas da API
 ├── services/            # Serviços
@@ -137,6 +156,8 @@ ALLOWED_ORIGINS=https://mercearia.digital
 | POST   | /api/auth/register               | Registrar novo usuário         |
 | GET    | /api/auth/verify-email           | Verificar e-mail               |
 | POST   | /api/auth/login                  | Login de usuário               |
+| GET    | /api/auth/google                 | Iniciar login com Google       |
+| GET    | /api/auth/google/callback        | Callback do login com Google   |
 | POST   | /api/auth/refresh-token          | Renovar tokens                 |
 | POST   | /api/auth/logout                 | Logout (invalidar tokens)      |
 | POST   | /api/auth/2fa/setup              | Configurar 2FA                 |
@@ -196,6 +217,19 @@ npm run docker:dev
 npm run docker:build
 ```
 
+## Fluxo de Autenticação OAuth 2.0
+
+1. O usuário acessa a rota `/api/auth/google` para iniciar o processo de login
+2. O sistema redireciona para a página de login do Google
+3. Após autenticação bem-sucedida, o Google redireciona para `/api/auth/google/callback`
+4. O sistema:
+   - Verifica se o usuário já existe (por GoogleID ou email)
+   - Se não existir, cria um novo usuário
+   - Se existir mas sem vínculo com Google, vincula as contas
+   - Gera tokens JWT (access + refresh)
+   - Redireciona para o frontend com o token de acesso
+5. O frontend armazena o token e usa para requisições subsequentes
+
 ## Contribuição
 
 1. Faça um fork do projeto
@@ -210,15 +244,13 @@ npm run docker:build
 
 Este projeto está licenciado sob a [Licença ISC](LICENSE).
 
-Observações Importantes:
+## Observações Importantes:
 
-Em produção, use segredos fortes e complexos para JWT_SECRET e APP_KEY. Idealmente, gere-os usando uma ferramenta de geração de strings aleatórias seguras.
-Para o MongoDB Atlas, o MONGODB_CLUSTER seria algo como cluster0.xxxx.mongodb.net.
-Para reCAPTCHA, você precisará se registrar no Google reCAPTCHA e obter suas chaves.
-Para ambiente de desenvolvimento, você pode usar o serviço Mailhog para testar emails localmente, conforme configurado no docker-compose.
-Para os valores de tempo de expiração:
-
-JWT_EXPIRES_IN: Pode ser em segundos ou unidades como 60s, 15m, 2h, 1d
-JWT_REFRESH_EXPIRES_IN: Geralmente mais longo, como 7d (7 dias)
-
-Para testar localmente com Docker, muitas dessas variáveis já estão configuradas no arquivo docker-compose.yml, mas para produção, certifique-se de definir todas elas de forma segura, idealmente usando um serviço de gerenciamento de segredos como AWS Secrets Manager, HashiCorp Vault ou similar.
+- Em produção, use segredos fortes e complexos para JWT_SECRET, APP_KEY e GOOGLE_CLIENT_SECRET. Idealmente, gere-os usando uma ferramenta de geração de strings aleatórias seguras.
+- Para o MongoDB Atlas, o MONGODB_CLUSTER seria algo como cluster0.xxxx.mongodb.net.
+- Para reCAPTCHA, você precisará se registrar no Google reCAPTCHA e obter suas chaves.
+- Para ambiente de desenvolvimento, você pode usar o serviço Mailhog para testar emails localmente, conforme configurado no docker-compose.
+- Para os valores de tempo de expiração:
+  - JWT_EXPIRES_IN: Pode ser em segundos ou unidades como 60s, 15m, 2h, 1d
+  - JWT_REFRESH_EXPIRES_IN: Geralmente mais longo, como 7d (7 dias)
+- Para testar localmente com Docker, muitas dessas variáveis já estão configuradas no arquivo docker-compose.yml, mas para produção, certifique-se de definir todas elas de forma segura, idealmente usando um serviço de gerenciamento de segredos como AWS Secrets Manager, HashiCorp Vault ou similar.
