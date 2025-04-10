@@ -350,6 +350,35 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /auth/google:
+    get:
+      summary: Iniciar autenticação com Google
+      tags:
+        - Auth
+      responses:
+        '302':
+          description: Redirecionamento para página de autorização do Google
+
+  /auth/google/callback:
+    get:
+      summary: Callback da autenticação Google
+      tags:
+        - Auth
+      parameters:
+        - in: query
+          name: code
+          schema:
+            type: string
+          description: Código de autorização fornecido pelo Google
+        - in: query
+          name: state
+          schema:
+            type: string
+          description: Estado para prevenção CSRF
+      responses:
+        '302':
+          description: Redirecionamento para frontend com token de acesso
+
   /users/profile:
     get:
       summary: Obter perfil do usuário atual

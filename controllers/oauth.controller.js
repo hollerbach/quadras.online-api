@@ -1,6 +1,6 @@
 // 2. Create a new controller: controllers/oauth.controller.js
 const passport = require('passport');
-const oauthService = require('../services/oauth.service');
+const oauthService = require('../services/googleOauth.service');
 const tokenService = require('../services/token.service');
 const config = require('../config/env.config');
 const logger = require('../services/logger');

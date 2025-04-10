@@ -1,9 +1,8 @@
-// routes/auth.routes.js (atualizado com rotas OAuth)
+// routes/auth.routes.js
 const express = require('express');
 const router = express.Router();
-const passport = require('passport'); // Adicionar importação do passport
+const passport = require('passport');
 const authController = require('../controllers/auth.controller');
-const oauthController = require('../controllers/oauth.controller'); // Novo controlador
 
 // Middlewares
 const { authenticate } = require('../middlewares/auth.middleware');
@@ -126,27 +125,31 @@ router.post(
   authController.verify2FARecovery
 );
 
-// NOVAS ROTAS DE AUTENTICAÇÃO OAUTH
-
 /**
  * @route GET /api/auth/google
  * @desc Iniciar autenticação com Google
  * @access Público
  */
-router.get('/google', oauthController.googleAuth);
+router.get(
+  '/google',
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    session: false
+  })
+);
 
 /**
  * @route GET /api/auth/google/callback
- * @desc Callback de autenticação Google
+ * @desc Callback da autenticação Google
  * @access Público
  */
-router.get('/google/callback', oauthController.googleCallback);
-
-/**
- * @route POST /api/auth/google/unlink
- * @desc Desvincular conta do Google
- * @access Privado
- */
-router.post('/google/unlink', authenticate, oauthController.unlinkGoogle);
+router.get(
+  '/google/callback',
+  passport.authenticate('google', {
+    failureRedirect: '/login',
+    session: false
+  }),
+  authController.googleCallback
+);
 
 module.exports = router;

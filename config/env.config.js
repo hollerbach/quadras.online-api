@@ -1,4 +1,4 @@
-// config/env.config.js (atualizado com configurações OAuth)
+// config/env.config.js
 const logger = require('../services/logger');
 
 // Lista de variáveis de ambiente obrigatórias em produção
@@ -13,7 +13,9 @@ const requiredEnvVars = [
   'RECAPTCHA_SECRET',
   'APP_KEY',
   'DB_NAME',
-  'MONGODB_CLUSTER'
+  'MONGODB_CLUSTER',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET'
 ];
 
 // Lista de variáveis de banco de dados que são opcionais em desenvolvimento
@@ -21,13 +23,6 @@ const dbEnvVars = [
   'DB_USER',
   'DB_PASS',
   'MONGODB_APP'
-];
-
-// Lista de variáveis OAuth que são opcionais em desenvolvimento
-const oauthEnvVars = [
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'OAUTH_REDIRECT_URL'
 ];
 
 // Verificar variáveis obrigatórias
@@ -47,13 +42,6 @@ for (const envVar of dbEnvVars) {
     if (process.env.NODE_ENV === 'production') {
       throw new Error(`Variável de ambiente ${envVar} não definida`);
     }
-  }
-}
-
-// Verificar variáveis OAuth
-for (const envVar of oauthEnvVars) {
-  if (!process.env[envVar]) {
-    logger.warn(`Variável de ambiente OAuth ${envVar} não definida. Funcionalidades OAuth podem não funcionar corretamente.`);
   }
 }
 
@@ -105,13 +93,13 @@ module.exports = {
     }
   },
 
-  // Novas configurações para OAuth
+  // Adicionar configurações OAuth
   oauth: {
     google: {
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET
-    },
-    redirectUrl: process.env.OAUTH_REDIRECT_URL || 'http://localhost:3000/auth/callback'
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackUrl: `${process.env.BASE_URL || 'http://localhost:3000'}/api/auth/google/callback`
+    }
   },
 
   email: {

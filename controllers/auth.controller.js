@@ -2,11 +2,13 @@
 const userService = require('../services/user.service');
 const tokenService = require('../services/token.service');
 const twoFactorService = require('../services/twoFactor.service');
+const googleAuthService = require('../services/googleAuth.service');
 const mailService = require('../services/mail.service');
 const logger = require('../services/logger');
 const { ApiError } = require('../middlewares/errorHandler.middleware');
 const config = require('../config/env.config');
-const auditService = require('../services/audit.service'); // Novo serviço para logging de auditoria
+const auditService = require('../services/audit.service');
+const User = require('../models/user.model');
 
 class AuthController {
   /**
@@ -135,7 +137,8 @@ class AuthController {
         user: {
           id: user._id,
           email: user.email,
-          role: user.role
+          role: user.role,
+          name: user.name || user.oauth?.google?.name
         }
       });
     } catch (error) {
@@ -166,6 +169,40 @@ class AuthController {
       }
 
       next(error);
+    }
+  }
+
+  /**
+   * Processa o callback da autenticação Google
+   */
+  async googleCallback(req, res, next) {
+    try {
+      const ipAddress = req.ip;
+      const user = req.user;
+
+      if (!user) {
+        throw new ApiError(401, 'Autenticação Google falhou');
+      }
+
+      // Gerar tokens
+      const { accessToken, refreshToken } = await googleAuthService.generateAuthTokens(user, ipAddress);
+
+      // Definir cookie HTTP-only para refresh token
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: config.app.env === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
+      });
+
+      // Redirecionar para frontend com token
+      // Em produção, pode redirecionar para um endpoint específico que processa o login
+      const redirectUrl = `${config.app.frontendUrl || config.app.baseUrl}/login/oauth/success?token=${accessToken}`;
+      res.redirect(redirectUrl);
+    } catch (error) {
+      // Em caso de erro, redirecionar para página de erro
+      const redirectUrl = `${config.app.frontendUrl || config.app.baseUrl}/login/oauth/error`;
+      res.redirect(redirectUrl);
     }
   }
 

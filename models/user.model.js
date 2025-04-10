@@ -1,4 +1,4 @@
-// models/user.model.js (atualizado com suporte para OAuth)
+// models/user.model.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -14,6 +14,10 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true
+    },
+    name: {
+      type: String,
+      trim: true
     },
     role: {
       type: String,
@@ -39,6 +43,16 @@ const userSchema = new mongoose.Schema(
     twoFactorSecret: {
       type: String
     },
+    // Adicione o campo OAuth para armazenar informações de autenticação externa
+    oauth: {
+      google: {
+        id: String,
+        email: String,
+        name: String,
+        picture: String
+      },
+      // Pode adicionar outros provedores no futuro (Facebook, Apple, etc)
+    },
     recoveryCodes: [
       {
         code: String,
@@ -54,17 +68,6 @@ const userSchema = new mongoose.Schema(
     },
     lockUntil: Date,
     lastLogin: Date,
-    // Novo campo para autenticação OAuth
-    oauth: {
-      google: {
-        id: String,
-        email: String,
-        name: String,
-        picture: String,
-        lastLogin: Date
-      }
-      // Outros provedores podem ser adicionados aqui, como Facebook, Apple, etc.
-    },
     createdAt: {
       type: Date,
       default: Date.now
@@ -148,11 +151,6 @@ userSchema.methods.setRecoveryCodes = async function (codes) {
   }));
 
   return this.save();
-};
-
-// Verificar se o usuário tem autenticação OAuth configurada
-userSchema.methods.hasOAuthProvider = function (provider) {
-  return !!(this.oauth && this.oauth[provider] && this.oauth[provider].id);
 };
 
 // Pré-save hook para atualizar timestamp
