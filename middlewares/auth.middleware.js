@@ -34,8 +34,8 @@ exports.authenticate = (req, res, next) => {
 
       // Verificar se usuário está verificado (exceto para mudança de senha e logout)
       const isVerificationRequired = ![
-        '/api/auth/logout',
-        '/api/users/password'
+        '/auth/logout',
+        '/users/password'
       ].includes(req.path);
 
       if (isVerificationRequired && !user.verified) {

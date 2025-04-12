@@ -3,6 +3,11 @@ const logger = require('../services/logger');
 
 // Lista de variáveis de ambiente obrigatórias em produção
 const requiredEnvVars = [
+  'NODE_ENV',
+  'PORT',
+  'APP_KEY',
+  'ALLOWED_ORIGINS',
+  'BASE_URL',
   'JWT_SECRET',
   'JWT_EXPIRES_IN',
   'JWT_REFRESH_EXPIRES_IN',
@@ -13,7 +18,6 @@ const requiredEnvVars = [
   'RECAPTCHA_SECRET',
   'APP_KEY',
   'DB_NAME',
-  'MONGODB_CLUSTER',
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET'
 ];
@@ -22,6 +26,7 @@ const requiredEnvVars = [
 const dbEnvVars = [
   'DB_USER',
   'DB_PASS',
+  'MONGODB_CLUSTER',
   'MONGODB_APP'
 ];
 
@@ -38,8 +43,8 @@ for (const envVar of requiredEnvVars) {
 // Verificar variáveis de banco de dados
 for (const envVar of dbEnvVars) {
   if (!process.env[envVar]) {
-    logger.warn(`Variável de ambiente ${envVar} não definida`);
     if (process.env.NODE_ENV === 'production') {
+      logger.warn(`Variável de ambiente ${envVar} não definida`);
       throw new Error(`Variável de ambiente ${envVar} não definida`);
     }
   }
@@ -48,10 +53,9 @@ for (const envVar of dbEnvVars) {
 // Valores padrão para ambiente de desenvolvimento
 const getMongoURI = () => {
   // Se estamos em desenvolvimento e faltam credenciais, usamos uma conexão local
-  if (process.env.NODE_ENV !== 'production' && 
-     (!process.env.DB_USER || !process.env.DB_PASS || !process.env.MONGODB_CLUSTER)) {
+  if (process.env.NODE_ENV !== 'production' ) {
     logger.info('Usando conexão MongoDB local para ambiente de desenvolvimento');
-    return `mongodb://localhost:27017/${process.env.DB_NAME || 'mercearia_dev'}`;
+    return `mongodb://localhost:27017/${process.env.DB_NAME}`;
   }
   
   // Caso contrário, usamos a conexão Atlas com credenciais
@@ -61,10 +65,10 @@ const getMongoURI = () => {
 // Configurações organizadas por contexto
 module.exports = {
   app: {
-    env: process.env.NODE_ENV || 'development',
-    port: process.env.PORT || 3000,
-    appKey: process.env.APP_KEY || 'dev_app_key_default',
-    baseUrl: process.env.BASE_URL || 'http://localhost:3000'
+    env: process.env.NODE_ENV,
+    port: process.env.PORT,
+    appKey: process.env.APP_KEY,
+    baseUrl: process.env.BASE_URL
   },
 
   db: {
@@ -76,9 +80,9 @@ module.exports = {
 
   auth: {
     jwt: {
-      secret: process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev_jwt_secret' : undefined),
-      expiresIn: process.env.JWT_EXPIRES_IN || '1h',
-      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
+      secret: process.env.JWT_SECRET,
+      expiresIn: process.env.JWT_EXPIRES_IN,
+      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN
     },
     recaptcha: {
       secret: process.env.RECAPTCHA_SECRET,
@@ -98,7 +102,7 @@ module.exports = {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackUrl: `${process.env.BASE_URL || 'http://localhost:3000'}/api/auth/google/callback`
+      callbackUrl: `${process.env.BASE_URL}/auth/google/callback`
     }
   },
 
@@ -115,7 +119,7 @@ module.exports = {
 
   security: {
     cors: {
-      allowedOrigins: (process.env.ALLOWED_ORIGINS || 'https://mercearia.digital,http://localhost:3000').split(','),
+      allowedOrigins: (process.env.ALLOWED_ORIGINS).split(','),
       credentials: true
     },
     rateLimit: {

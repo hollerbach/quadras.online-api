@@ -26,7 +26,7 @@ class GoogleAuthService {
         {
           clientID: config.oauth.google.clientId,
           clientSecret: config.oauth.google.clientSecret,
-          callbackURL: `${config.app.baseUrl}/api/auth/google/callback`,
+          callbackURL: `${config.app.baseUrl}/auth/google/callback`,
           scope: ['profile', 'email']
         },
         async (accessToken, refreshToken, profile, done) => {

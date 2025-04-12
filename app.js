@@ -77,7 +77,7 @@ app.use(globalRateLimit);
 
 // Rotas públicas (não necessitam CSRF)
 app.use(
-  '/api/docs',
+  '/docs',
   swaggerUi.serve,
   swaggerUi.setup(swaggerDocument, {
     customCss: '.swagger-ui .topbar { display: none }'
@@ -92,11 +92,11 @@ app.use(
 // app.use(csrfErrorHandler);
 
 // Definição de rotas
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
+app.use('/auth', authRoutes);
+app.use('/users', userRoutes);
 
 // Rota de verificação de saúde
-app.get('/api/health', healthController.checkHealth);
+app.get('/health', healthController.checkHealth);
 
 // Middleware para rotas não encontradas
 app.use(notFoundHandler);

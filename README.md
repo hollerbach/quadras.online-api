@@ -130,7 +130,7 @@ Para habilitar o login com Google:
 3. Configure a tela de consentimento OAuth
 4. Crie credenciais OAuth 2.0 (ID do cliente)
 5. Adicione as origens JavaScript autorizadas (ex: http://localhost:3000)
-6. Adicione URIs de redirecionamento (ex: http://localhost:3000/api/auth/google/callback)
+6. Adicione URIs de redirecionamento (ex: http://localhost:3000/auth/google/callback)
 7. Copie o ID do cliente e o segredo para as variáveis de ambiente
 
 ## Estrutura do Projeto
@@ -153,32 +153,32 @@ Para habilitar o login com Google:
 
 | Método | Endpoint                         | Descrição                      |
 | ------ | -------------------------------- | ------------------------------ |
-| POST   | /api/auth/register               | Registrar novo usuário         |
-| GET    | /api/auth/verify-email           | Verificar e-mail               |
-| POST   | /api/auth/login                  | Login de usuário               |
-| GET    | /api/auth/google                 | Iniciar login com Google       |
-| GET    | /api/auth/google/callback        | Callback do login com Google   |
-| POST   | /api/auth/refresh-token          | Renovar tokens                 |
-| POST   | /api/auth/logout                 | Logout (invalidar tokens)      |
-| POST   | /api/auth/2fa/setup              | Configurar 2FA                 |
-| POST   | /api/auth/2fa/verify             | Verificar token 2FA            |
-| POST   | /api/auth/2fa/disable            | Desativar 2FA                  |
-| POST   | /api/auth/password-reset/request | Solicitar redefinição de senha |
-| POST   | /api/auth/password-reset/confirm | Confirmar redefinição de senha |
-| GET    | /api/users/profile               | Obter perfil do usuário        |
-| PUT    | /api/users/profile               | Atualizar perfil               |
-| PUT    | /api/users/password              | Alterar senha                  |
-| GET    | /api/users                       | Listar usuários (admin)        |
-| GET    | /api/users/:id                   | Obter usuário por ID (admin)   |
-| PUT    | /api/users/:id                   | Atualizar usuário (admin)      |
-| DELETE | /api/users/:id                   | Desativar usuário (admin)      |
+| POST   | /auth/register               | Registrar novo usuário         |
+| GET    | /auth/verify-email           | Verificar e-mail               |
+| POST   | /auth/login                  | Login de usuário               |
+| GET    | /auth/google                 | Iniciar login com Google       |
+| GET    | /auth/google/callback        | Callback do login com Google   |
+| POST   | /auth/refresh-token          | Renovar tokens                 |
+| POST   | /auth/logout                 | Logout (invalidar tokens)      |
+| POST   | /auth/2fa/setup              | Configurar 2FA                 |
+| POST   | /auth/2fa/verify             | Verificar token 2FA            |
+| POST   | /auth/2fa/disable            | Desativar 2FA                  |
+| POST   | /auth/password-reset/request | Solicitar redefinição de senha |
+| POST   | /auth/password-reset/confirm | Confirmar redefinição de senha |
+| GET    | /users/profile               | Obter perfil do usuário        |
+| PUT    | /users/profile               | Atualizar perfil               |
+| PUT    | /users/password              | Alterar senha                  |
+| GET    | /users                       | Listar usuários (admin)        |
+| GET    | /users/:id                   | Obter usuário por ID (admin)   |
+| PUT    | /users/:id                   | Atualizar usuário (admin)      |
+| DELETE | /users/:id                   | Desativar usuário (admin)      |
 
 ## Documentação da API
 
 A documentação completa da API está disponível em:
 
 ```
-http://localhost:3000/api/docs
+http://localhost:3000/docs
 ```
 
 ## Testes
@@ -219,9 +219,9 @@ npm run docker:build
 
 ## Fluxo de Autenticação OAuth 2.0
 
-1. O usuário acessa a rota `/api/auth/google` para iniciar o processo de login
+1. O usuário acessa a rota `/auth/google` para iniciar o processo de login
 2. O sistema redireciona para a página de login do Google
-3. Após autenticação bem-sucedida, o Google redireciona para `/api/auth/google/callback`
+3. Após autenticação bem-sucedida, o Google redireciona para `/auth/google/callback`
 4. O sistema:
    - Verifica se o usuário já existe (por GoogleID ou email)
    - Se não existir, cria um novo usuário

@@ -15,10 +15,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true
     },
-    name: {
-      type: String,
-      trim: true
-    },
     role: {
       type: String,
       enum: ['user', 'admin'],
@@ -62,12 +58,6 @@ const userSchema = new mongoose.Schema(
         }
       }
     ],
-    failedLoginAttempts: {
-      type: Number,
-      default: 0
-    },
-    lockUntil: Date,
-    lastLogin: Date,
     createdAt: {
       type: Date,
       default: Date.now
@@ -75,6 +65,20 @@ const userSchema = new mongoose.Schema(
     updatedAt: {
       type: Date,
       default: Date.now
+    },
+    lastLogin: Date,
+    failedLoginAttempts: {
+      type: Number,
+      default: 0
+    },
+    lockUntil: Date,
+    name: {
+      type: String,
+      trim: true
+    },
+    surname: {
+      type: String,
+      trim: true
     }
   },
   {

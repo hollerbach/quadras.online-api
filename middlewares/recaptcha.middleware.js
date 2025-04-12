@@ -5,7 +5,7 @@ module.exports = async (req, res, next) => {
   if (!token) return res.status(400).json({ message: 'reCAPTCHA ausente' });
 
   try {
-    const response = await axios.post(`https://www.google.com/recaptcha/api/siteverify`, null, {
+    const response = await axios.post(`https://www.google.com/recaptcha/siteverify`, null, {
       params: {
         secret: process.env.RECAPTCHA_SECRET,
         response: token

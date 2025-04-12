@@ -15,7 +15,7 @@ jest.mock('../../services/mail.service', () => ({
 }));
 
 describe('Auth Controller', () => {
-  describe('POST /api/auth/register', () => {
+  describe('POST /auth/register', () => {
     it('deve registrar um novo usuário com sucesso', async () => {
       const userData = {
         email: 'test@example.com',
@@ -23,7 +23,7 @@ describe('Auth Controller', () => {
         role: 'user'
       };
 
-      const response = await request(app).post('/api/auth/register').send(userData);
+      const response = await request(app).post('/auth/register').send(userData);
 
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty('message');
@@ -56,7 +56,7 @@ describe('Auth Controller', () => {
         password: 'Test@123456'
       };
 
-      const response = await request(app).post('/api/auth/register').send(userData);
+      const response = await request(app).post('/auth/register').send(userData);
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('message');
@@ -69,7 +69,7 @@ describe('Auth Controller', () => {
         password: '123' // senha muito curta
       };
 
-      const response = await request(app).post('/api/auth/register').send(userData);
+      const response = await request(app).post('/auth/register').send(userData);
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('errors');
@@ -77,7 +77,7 @@ describe('Auth Controller', () => {
     });
   });
 
-  describe('POST /api/auth/login', () => {
+  describe('POST /auth/login', () => {
     beforeEach(async () => {
       // Criar usuário de teste verificado
       await User.create({
@@ -108,7 +108,7 @@ describe('Auth Controller', () => {
 
     it('deve autenticar um usuário com sucesso', async () => {
       const response = await request(app)
-        .post('/api/auth/login')
+        .post('/auth/login')
         .set('x-app-key', process.env.APP_KEY) // Middleware AppKey
         .send({
           email: 'user@example.com',
@@ -127,7 +127,7 @@ describe('Auth Controller', () => {
 
     it('deve requerer 2FA para um usuário com 2FA ativado', async () => {
       const response = await request(app)
-        .post('/api/auth/login')
+        .post('/auth/login')
         .set('x-app-key', process.env.APP_KEY)
         .send({
           email: '2fa@example.com',
@@ -142,7 +142,7 @@ describe('Auth Controller', () => {
 
     it('deve recusar login para usuário não verificado', async () => {
       const response = await request(app)
-        .post('/api/auth/login')
+        .post('/auth/login')
         .set('x-app-key', process.env.APP_KEY)
         .send({
           email: 'unverified@example.com',
@@ -156,7 +156,7 @@ describe('Auth Controller', () => {
 
     it('deve recusar login com credenciais inválidas', async () => {
       const response = await request(app)
-        .post('/api/auth/login')
+        .post('/auth/login')
         .set('x-app-key', process.env.APP_KEY)
         .send({
           email: 'user@example.com',
@@ -169,7 +169,7 @@ describe('Auth Controller', () => {
     });
   });
 
-  describe('POST /api/auth/logout', () => {
+  describe('POST /auth/logout', () => {
     let token;
 
     beforeEach(async () => {
@@ -190,7 +190,7 @@ describe('Auth Controller', () => {
 
     it('deve fazer logout com sucesso', async () => {
       const response = await request(app)
-        .post('/api/auth/logout')
+        .post('/auth/logout')
         .set('Authorization', `Bearer ${token}`);
 
       expect(response.status).toBe(200);
@@ -203,7 +203,7 @@ describe('Auth Controller', () => {
     });
 
     it('deve retornar erro para logout sem autenticação', async () => {
-      const response = await request(app).post('/api/auth/logout');
+      const response = await request(app).post('/auth/logout');
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('message');
@@ -211,7 +211,7 @@ describe('Auth Controller', () => {
     });
   });
 
-  describe('POST /api/auth/password-reset/request', () => {
+  describe('POST /auth/password-reset/request', () => {
     beforeEach(async () => {
       await User.create({
         email: 'reset@example.com',
@@ -222,7 +222,7 @@ describe('Auth Controller', () => {
     });
 
     it('deve solicitar redefinição de senha com sucesso', async () => {
-      const response = await request(app).post('/api/auth/password-reset/request').send({
+      const response = await request(app).post('/auth/password-reset/request').send({
         email: 'reset@example.com'
       });
 
@@ -242,7 +242,7 @@ describe('Auth Controller', () => {
     });
 
     it('não deve revelar se o e-mail existe ou não', async () => {
-      const response = await request(app).post('/api/auth/password-reset/request').send({
+      const response = await request(app).post('/auth/password-reset/request').send({
         email: 'nonexistent@example.com'
       });
 

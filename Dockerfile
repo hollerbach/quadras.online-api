@@ -31,7 +31,7 @@ EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD wget -q -O- http://localhost:3000/api/health || exit 1
+    CMD wget -q -O- http://localhost:3000/health || exit 1
 
 # Comando para iniciar aplicação com dumb-init para manipular sinais corretamente
 ENTRYPOINT ["dumb-init", "--"]
