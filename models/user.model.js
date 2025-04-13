@@ -1,9 +1,17 @@
 // models/user.model.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { v4: uuidv4 } = require('uuid'); // Importar a biblioteca uuid
 
 const userSchema = new mongoose.Schema(
   {
+    uuid: {
+      type: String,
+      unique: true,
+      default: () => uuidv4(), // Gerar um UUID automático
+      required: true,
+      immutable: true // O UUID não deve mudar uma vez atribuído
+    },
     email: {
       type: String,
       unique: true,
@@ -161,9 +169,10 @@ userSchema.methods.setRecoveryCodes = async function (codes) {
 userSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
-});
+};
 
 // Índices para melhorar performance de consultas
+userSchema.index({ uuid: 1 }); // Adicionando índice para o campo UUID
 userSchema.index({ verifyToken: 1 }, { sparse: true });
 userSchema.index({ resetToken: 1 }, { sparse: true });
 userSchema.index({ role: 1 });
