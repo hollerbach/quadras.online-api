@@ -1,107 +1,49 @@
-// app.js
+// src/app.js
 const express = require('express');
-const cookieParser = require('cookie-parser');
-const cors = require('cors');
-const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
-const passport = require('passport');
-const config = require('./config/env.config');
-const healthController = require('./controllers/health.controller');
+const logger = require('./infrastructure/logging/logger');
+const config = require('./infrastructure/config');
 
-// Inicializar serviços OAuth
-require('./services/googleAuth.service');
+// Middlewares globais
+const setupMiddlewares = require('./interfaces/api/middlewares');
 
-// Middlewares de segurança
-const {
-  helmetConfig,
-  csrfProtection,
-  csrfToken,
-  csrfErrorHandler,
-  globalRateLimit,
-  validateOrigin
-} = require('./middlewares/security.middleware');
+// Rotas da API
+const setupRoutes = require('./interfaces/api/routes');
 
-// Middlewares de manipulação de erros
+// Manipulação de erros
 const {
   errorHandler,
   notFoundHandler
-} = require('./middlewares/errorHandler.middleware');
+} = require('./interfaces/api/middlewares/error.middleware');
 
-// Rotas
-const authRoutes = require('./routes/auth.routes');
-const userRoutes = require('./routes/user.routes');
+/**
+ * Inicializa e configura a aplicação Express
+ */
+const initializeApp = () => {
+  const app = express();
 
-// Logger
-const logger = require('./services/logger');
+  // Middleware de logging de requisições
+  app.use((req, res, next) => {
+    req.logger = logger;
+    logger.info(`[${req.method}] ${req.url}`);
+    next();
+  });
 
-// Documentação Swagger
-const swaggerDocument = YAML.load('./docs/swagger.yaml');
+  // Configurar middlewares globais
+  setupMiddlewares(app);
 
-// Inicializar aplicação
-const app = express();
+  // Configurar rotas
+  setupRoutes(app);
 
-// Middleware de logging de requisições
-app.use((req, res, next) => {
-  req.logger = logger;
-  logger.info(`[${req.method}] ${req.url}`);
-  next();
-});
+  // Middleware para rotas não encontradas (404)
+  app.use(notFoundHandler);
 
-// Middlewares globais
-app.use(helmetConfig); // Configurações de segurança para cabeçalhos HTTP
-app.use(express.json()); // Parser de corpo JSON
-app.use(express.urlencoded({ extended: true })); // Parser de corpo de formulário
-app.use(cookieParser()); // Parser de cookies
-// app.use(unhandledPromiseRejection); // Capturar rejeições de promises não tratadas
+  // Middleware de tratamento de erros (deve ser o último)
+  app.use(errorHandler);
 
-// Inicialização do Passport
-app.use(passport.initialize());
+  return app;
+};
 
-// Configuração de CORS personalizada
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || config.security.cors.allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        logger.warn(`Tentativa de acesso CORS bloqueada: ${origin}`);
-        callback(new Error('Não permitido por CORS'));
-      }
-    },
-    credentials: config.security.cors.credentials
-  })
-);
+// Inicializar a aplicação
+const app = initializeApp();
 
-// Rate limiting global
-app.use(globalRateLimit);
-
-// Rotas públicas (não necessitam CSRF)
-app.use(
-  '/docs',
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerDocument, {
-    customCss: '.swagger-ui .topbar { display: none }'
-  })
-);
-
-// Aplicar proteção CSRF para rotas não públicas
-// Observação: CSRF não deve ser aplicado a APIs puras RESTful
-// Se estiver servindo páginas web juntamente com a API, habilite o comentário abaixo
-// app.use(csrfProtection);
-// app.use(csrfToken);
-// app.use(csrfErrorHandler);
-
-// Definição de rotas
-app.use('/auth', authRoutes);
-app.use('/users', userRoutes);
-
-// Rota de verificação de saúde
-app.get('/health', healthController.checkHealth);
-
-// Middleware para rotas não encontradas
-app.use(notFoundHandler);
-
-// Middleware de tratamento de erros (deve ser o último)
-app.use(errorHandler);
-
-module.exports = app;
+module.exports = { app };

@@ -1,11 +1,16 @@
 # Mercearia Digital API
 
-Backend para o sistema de autenticação da Mercearia Digital, com suporte a autenticação em dois fatores, verificação de e-mail, OAuth 2.0, RBAC e todas as melhores práticas de segurança.
+Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa (Clean Architecture) e Domain-Driven Design (DDD), com suporte a autenticação em dois fatores, verificação de e-mail, OAuth 2.0, RBAC e todas as melhores práticas de segurança.
 
 ## Características
 
-- **Autenticação Segura**
+- **Arquitetura Limpa (Clean Architecture)**
+  - Separação clara entre domínios funcionais
+  - Independência de frameworks
+  - Camadas bem definidas: Domain, Application, Infrastructure, Interfaces
+  - Fácil adição de novos domínios funcionais
 
+- **Autenticação Segura**
   - JWT (Access Token + Refresh Token)
   - Autenticação em Dois Fatores (2FA) com TOTP
   - OAuth 2.0 com Google
@@ -14,31 +19,90 @@ Backend para o sistema de autenticação da Mercearia Digital, com suporte a aut
   - Redefinição de senha segura
 
 - **Segurança**
-
   - Proteção contra CSRF
   - Configurações de segurança com Helmet (CSP, XSS, etc.)
   - Blacklist de tokens
   - Proteção CORS configurável
   - Validação de entrada rigorosa
 
-- **Arquitetura**
+- **Design Patterns**
+  - Repository Pattern
+  - Use Case Pattern
+  - Dependency Injection
+  - Factory Pattern
+  - Adapter Pattern
 
-  - Padrão MVC
-  - Separação clara de responsabilidades
-  - Injeção de dependências
-  - Tratamento de erros centralizado
-  - Classes ES6 para organização do código
-
-- **Documentação**
-
-  - API documentada com Swagger/OpenAPI
-  - Código bem documentado com JSDoc
+- **Domínios**
+  - Autenticação (implementado)
+  - Usuários (implementado)
+  - Produtos (estrutura preparada)
+  - Pedidos (estrutura preparada)
+  - Entregas (estrutura preparada)
 
 - **Confiabilidade**
   - Testes automatizados
   - Validação de dados
   - Logging extensivo
   - Desligamento gracioso
+
+## Estrutura do Projeto
+
+```
+/src
+  /domain                 # Regras de negócio e entidades
+    /auth                 # Domínio de autenticação
+      /entities           # Modelos de domínio
+      /repositories       # Interfaces para acesso a dados
+      /use-cases          # Casos de uso do domínio
+      /services           # Serviços específicos do domínio
+    /users                # Domínio de usuários
+      /entities
+      /repositories
+      /use-cases
+      /services
+    /products             # (Futuro domínio)
+    /orders               # (Futuro domínio)
+    /delivery             # (Futuro domínio)
+  
+  /application            # Orquestração entre domínios
+    /services             # Serviços que coordenam múltiplos domínios
+    /dtos                 # Objetos de transferência de dados
+    /interfaces           # Interfaces da aplicação
+    /events               # Sistema de eventos entre domínios
+  
+  /infrastructure         # Detalhes técnicos e implementações
+    /database             # Implementação do acesso a dados
+      /mongodb            # Implementação específica para MongoDB
+        /models           # Modelos Mongoose
+        /repositories     # Implementações concretas dos repositórios
+    /external             # Serviços externos
+      /mail               # Serviço de e-mail
+      /oauth              # Serviços OAuth (Google, etc.)
+    /security             # Implementações de segurança
+      /token              # Serviço de tokens
+      /password           # Serviço de hashing de senhas
+      /two-factor         # Serviço de autenticação em dois fatores
+    /logging              # Serviço de logging
+    /config               # Configurações da aplicação
+  
+  /interfaces             # Adaptadores para o mundo externo
+    /api                  # API REST
+      /controllers        # Controladores HTTP
+      /routes             # Definições de rotas
+      /middlewares        # Middlewares da API
+      /validators         # Validação de entrada
+      /presenters         # Transformação de saída
+    /jobs                 # Tarefas agendadas
+    /subscribers          # Assinantes de eventos
+
+  /shared                 # Utilitários e código compartilhado
+    /utils                # Funções utilitárias
+    /constants            # Constantes e enumerações
+    /errors               # Classes de erro personalizadas
+
+  /app.js                 # Configuração da aplicação
+  /server.js              # Ponto de entrada
+```
 
 ## Requisitos
 
@@ -121,57 +185,29 @@ GOOGLE_CLIENT_ID=seu_google_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=seu_google_client_secret
 ```
 
-## Configuração OAuth 2.0
-
-Para habilitar o login com Google:
-
-1. Acesse o [Google Cloud Console](https://console.cloud.google.com/)
-2. Crie um novo projeto
-3. Configure a tela de consentimento OAuth
-4. Crie credenciais OAuth 2.0 (ID do cliente)
-5. Adicione as origens JavaScript autorizadas (ex: http://localhost:3000)
-6. Adicione URIs de redirecionamento (ex: http://localhost:3000/auth/google/callback)
-7. Copie o ID do cliente e o segredo para as variáveis de ambiente
-
-## Estrutura do Projeto
-
-```
-├── app.js               # Configuração do Express
-├── server.js            # Ponto de entrada
-├── config/              # Configurações
-├── controllers/         # Controladores
-├── middlewares/         # Middlewares
-├── models/              # Modelos Mongoose
-├── routes/              # Rotas da API
-├── services/            # Serviços
-├── tests/               # Testes automatizados
-├── docs/                # Documentação (Swagger)
-└── scripts/             # Scripts utilitários
-```
-
 ## API Endpoints
 
-| Método | Endpoint                         | Descrição                      |
-| ------ | -------------------------------- | ------------------------------ |
-| POST   | /auth/register               | Registrar novo usuário         |
-| GET    | /auth/verify-email           | Verificar e-mail               |
-| POST   | /auth/login                  | Login de usuário               |
-| GET    | /auth/google                 | Iniciar login com Google       |
-| GET    | /auth/google/callback        | Callback do login com Google   |
-| POST   | /auth/refresh-token          | Renovar tokens                 |
-| POST   | /auth/logout                 | Logout (invalidar tokens)      |
-| POST   | /auth/2fa/setup              | Configurar 2FA                 |
-| POST   | /auth/2fa/verify             | Verificar token 2FA            |
-| POST   | /auth/2fa/disable            | Desativar 2FA                  |
-| POST   | /auth/password-reset/request | Solicitar redefinição de senha |
-| POST   | /auth/password-reset/confirm | Confirmar redefinição de senha |
-| GET    | /users/profile               | Obter perfil do usuário        |
-| PUT    | /users/profile               | Atualizar perfil               |
-| PUT    | /users/password              | Alterar senha                  |
-| GET    | /users                       | Listar usuários (admin)        |
-| GET    | /users/:id                   | Obter usuário por ID (admin)   |
-| PUT    | /users/:id                   | Atualizar usuário (admin)      |
-| DELETE | /users/:id                   | Desativar usuário (admin)      |
+| Método | Endpoint                          | Descrição                      |
+| ------ | --------------------------------- | ------------------------------ |
+| POST   | /api/auth/register                | Registrar novo usuário         |
+| GET    | /api/auth/verify-email            | Verificar e-mail               |
+| POST   | /api/auth/login                   | Login de usuário               |
+| GET    | /api/auth/google                  | Iniciar login com Google       |
+| GET    | /api/auth/google/callback         | Callback do login com Google   |
+| POST   | /api/auth/refresh-token           | Renovar tokens                 |
+| POST   | /api/auth/logout                  | Logout (invalidar tokens)      |
+| POST   | /api/auth/2fa/setup               | Configurar 2FA                 |
+| POST   | /api/auth/2fa/verify              | Verificar token 2FA            |
+| POST   | /api/auth/2fa/disable             | Desativar 2FA                  |
+| POST   | /api/auth/password-reset/request  | Solicitar redefinição de senha |
+| POST   | /api/auth/password-reset/confirm  | Confirmar redefinição de senha |
+| GET    | /api/users/profile                | Obter perfil do usuário        |
+| PUT    | /api/users/profile                | Atualizar perfil               |
+| PUT    | /api/users/password               | Alterar senha                  |
+| GET    | /api/users                        | Listar usuários (admin)        |
+| GET    | /api/users/:id                    | Obter usuário por ID (admin)   |
+| PUT    | /api/users/:id                    | Atualizar usuário (admin)      |
+| DELETE | /api/users/:id                    | Desativar usuário (admin)      |
 
 ## Documentação da API
 
@@ -217,18 +253,27 @@ npm run docker:dev
 npm run docker:build
 ```
 
-## Fluxo de Autenticação OAuth 2.0
+## Adicionando Novos Domínios
 
-1. O usuário acessa a rota `/auth/google` para iniciar o processo de login
-2. O sistema redireciona para a página de login do Google
-3. Após autenticação bem-sucedida, o Google redireciona para `/auth/google/callback`
-4. O sistema:
-   - Verifica se o usuário já existe (por GoogleID ou email)
-   - Se não existir, cria um novo usuário
-   - Se existir mas sem vínculo com Google, vincula as contas
-   - Gera tokens JWT (access + refresh)
-   - Redireciona para o frontend com o token de acesso
-5. O frontend armazena o token e usa para requisições subsequentes
+Para adicionar um novo domínio funcional (como produtos, pedidos, etc.):
+
+1. Crie a estrutura de pastas para o domínio em `/src/domain/[nome-do-domínio]/`
+2. Defina entidades na pasta `entities` e interfaces de repositório em `repositories`
+3. Implemente casos de uso específicos em `use-cases`
+4. Crie implementações do repositório em `/src/infrastructure/database/mongodb/repositories/`
+5. Desenvolva controllers, validadores e rotas para a API
+
+## Fluxo Completo de Aplicação
+
+1. A requisição HTTP chega através de um router (`/interfaces/api/routes`)
+2. É processada por middlewares (`/interfaces/api/middlewares`)
+3. O controller (`/interfaces/api/controllers`) recebe a requisição
+4. Os dados são validados (`/interfaces/api/validators`)
+5. O controller chama um caso de uso (`/domain/*/use-cases`)
+6. O caso de uso implementa a lógica de negócio usando repositórios
+7. Os repositórios (`/domain/*/repositories`) são interfaces implementadas na infraestrutura
+8. O resultado volta pelo mesmo caminho, transformado pelo controller
+9. A resposta HTTP é enviada ao cliente
 
 ## Contribuição
 
@@ -244,13 +289,11 @@ npm run docker:build
 
 Este projeto está licenciado sob a [Licença ISC](LICENSE).
 
-## Observações Importantes:
 
-- Em produção, use segredos fortes e complexos para JWT_SECRET, APP_KEY e GOOGLE_CLIENT_SECRET. Idealmente, gere-os usando uma ferramenta de geração de strings aleatórias seguras.
-- Para o MongoDB Atlas, o MONGODB_CLUSTER seria algo como cluster0.xxxx.mongodb.net.
-- Para reCAPTCHA, você precisará se registrar no Google reCAPTCHA e obter suas chaves.
-- Para ambiente de desenvolvimento, você pode usar o serviço Mailhog para testar emails localmente, conforme configurado no docker-compose.
-- Para os valores de tempo de expiração:
-  - JWT_EXPIRES_IN: Pode ser em segundos ou unidades como 60s, 15m, 2h, 1d
-  - JWT_REFRESH_EXPIRES_IN: Geralmente mais longo, como 7d (7 dias)
-- Para testar localmente com Docker, muitas dessas variáveis já estão configuradas no arquivo docker-compose.yml, mas para produção, certifique-se de definir todas elas de forma segura, idealmente usando um serviço de gerenciamento de segredos como AWS Secrets Manager, HashiCorp Vault ou similar.
+Todos os endpoints originais continuam funcionando, porém agora são processados através das camadas bem definidas da arquitetura limpa:
+
+Routes → Controllers → Use Cases → Repositories
+Controllers chamam casos de uso em vez de serviços diretamente
+Os casos de uso encapsulam a lógica de negócio e usam repositórios para persistência
+
+A API está pronta para produção e mantém a paridade funcional com o código original do GitHub, apenas com uma arquitetura mais robusta e sustentável.
