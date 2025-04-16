@@ -387,3 +387,186 @@ Para fortalecer ainda mais a segurança, considere:
 - [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/)
 - [Content Security Policy (MDN)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
 - [Cookie Security (OWASP)](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#cookies)
+
+
+# Validação de Entrada e Segurança de API
+
+Este documento detalha a implementação de validação e sanitização avançada para a API da Mercearia Digital, oferecendo proteção contra injeções e outras vulnerabilidades relacionadas a entrada de dados.
+
+## 1. Sistema de Validação Implementado
+
+O novo sistema de validação implementa múltiplas camadas de proteção:
+
+### 1.1 Validação Baseada em Schema
+
+Cada endpoint da API tem um schema de validação específico que define:
+- Campos obrigatórios e opcionais
+- Tipos de dados permitidos
+- Limites de tamanho para strings, arrays e objetos
+- Padrões (regex) para validação de formato
+- Relações entre campos (ex: confirmação de senha)
+
+### 1.2 Sanitização de Entrada
+
+Todos os dados recebidos passam por:
+- **Sanitização XSS**: Remoção de código JavaScript malicioso
+- **Sanitização NoSQL**: Prevenção de injeção em MongoDB
+- **Escape HTML**: Conversão de caracteres HTML especiais
+- **Normalização**: Uniformização de formatos (ex: email)
+
+### 1.3 Limites Rigorosos
+
+Implementados limites para prevenir ataques DoS:
+- Limites de tamanho para strings (máx. 1000 caracteres por padrão)
+- Limites para arrays (máx. 100 itens por padrão)
+- Limites para objetos aninhados (máx. 10 níveis de profundidade)
+- Limites para campos específicos (ex: nome max. 100 caracteres)
+
+### 1.4 Validações Específicas por Domínio
+
+Validações específicas para cada domínio funcional:
+- **Autenticação**: Força de senha, unicidade de email
+- **Usuários**: Limites para campos de perfil, permissões
+- **Outros domínios**: Validações específicas quando implementados
+
+## 2. Como Funciona
+
+### 2.1 Fluxo de Validação
+
+```
+Request → Sanitização Global → Limite de Payload → 
+Validações Específicas → Sanitização por Campo → 
+Verificação de Resultados → Controller
+```
+
+### 2.2 Tipos de Validação
+
+**Validações Síncronas**:
+- Verificação de tipo (string, número, etc.)
+- Verificação de comprimento e tamanho
+- Verificação de padrão (regex)
+- Relações entre campos
+
+**Validações Assíncronas**:
+- Verificação de existência na base de dados
+- Verificação de unicidade (ex: email)
+- Validações com serviços externos
+
+### 2.3 Tratamento de Erros
+
+- Mensagens de erro específicas e claras
+- Agrupamento de múltiplos erros de validação
+- Redação das mensagens sem revelar detalhes de implementação
+- Ocultação de dados sensíveis nos logs de erro
+
+## 3. Implementação por Componente
+
+### 3.1 Middleware de Validação
+
+```javascript
+// src/interfaces/api/middlewares/validation.middleware.js
+// Provê funções reutilizáveis para validação e sanitização
+```
+
+Funções principais:
+- `validate()`: Processa resultados da validação
+- `sanitizeInputs()`: Sanitiza todos os inputs
+- `limitPayloadSize()`: Verifica limites de tamanho
+- `validators`: Biblioteca de validadores reutilizáveis
+- `createValidator()`: Cria cadeias de validação
+
+### 3.2 Schemas de Validação por Domínio
+
+```javascript
+// src/interfaces/api/validators/auth.validator.js
+// Schemas específicos para autenticação
+
+// src/interfaces/api/validators/user.validator.js
+// Schemas específicos para usuários
+```
+
+Cada schema contém:
+- Validadores encadeados para cada campo
+- Sanitizadores específicos
+- Validações personalizadas
+- Limitadores de tamanho
+
+### 3.3 Integração nas Rotas
+
+```javascript
+// src/interfaces/api/routes/auth.routes.js
+router.post('/register', validate('register'), asyncHandler(authController.register));
+```
+
+## 4. Boas Práticas Implementadas
+
+- **Princípio de Falha Segura**: Rejeita por padrão, aceita apenas o que é explicitamente permitido
+- **Validação no Servidor**: Mesmo que exista validação no cliente
+- **Validação Positiva**: Define o que é permitido em vez do que é proibido
+- **Sanitização Dupla**: Em nível global e em nível de campo
+- **Limites Estritos**: Para todos os tipos de dados
+- **Mensagens de Erro Seguras**: Sem revelar detalhes de implementação
+
+## 5. Como Estender
+
+### 5.1 Adicionando Novos Schemas
+
+1. Crie um novo arquivo em `src/interfaces/api/validators/` para seu domínio
+2. Defina schemas usando a API do express-validator e os validators comuns
+3. Exporte funções de validação através da função `validate()`
+
+### 5.2 Adicionando Validadores Personalizados
+
+```javascript
+// Exemplo de validador personalizado
+const customValidator = (value) => {
+  // Lógica de validação
+  if (!isValid(value)) {
+    throw new Error('Mensagem de erro');
+  }
+  return true;
+};
+
+// Uso em schema
+body('campo').custom(customValidator)
+```
+
+### 5.3 Adicionando Sanitizadores Personalizados
+
+```javascript
+// Exemplo de sanitizador personalizado
+const customSanitizer = (value) => {
+  // Lógica de sanitização
+  return sanitizedValue;
+};
+
+// Uso em schema
+body('campo').customSanitizer(customSanitizer)
+```
+
+## 6. Testes
+
+A validação rigorosa deve ser testada para garantir que:
+
+1. Entradas válidas são aceitas
+2. Entradas inválidas são rejeitadas com mensagens apropriadas
+3. Ataques conhecidos são bloqueados
+4. Limites são aplicados corretamente
+5. Sanitização funciona conforme esperado
+
+Recomenda-se:
+- Testes unitários para cada validador
+- Testes de integração para schemas completos
+- Testes de segurança (fuzzing) para encontrar falhas
+
+## 7. Considerações Finais
+
+Este sistema de validação é uma linha de defesa crítica, mas deve ser complementado com:
+
+- Testes de penetração regulares
+- Revisões de código com foco em segurança
+- Atualizações de dependências
+- Monitoramento de falhas de validação
+- Educação contínua sobre novos vetores de ataque
+
+A validação de entrada é uma das medidas mais eficazes para prevenir vulnerabilidades como injeção de código, XSS e outros ataques da lista OWASP Top 10.
