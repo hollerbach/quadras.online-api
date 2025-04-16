@@ -10,39 +10,153 @@ const config = require('../config');
 const securityConfig = {
   /**
    * Configuração do Helmet para cabeçalhos de segurança
+   * Implementa todas as proteções recomendadas pelo OWASP
    */
   helmet: helmet({
+    // Content Security Policy (CSP) restritivo
     contentSecurityPolicy: {
+      useDefaults: false,
       directives: {
-        defaultSrc: ["'self'"],
+        defaultSrc: ["'none'"],  // Negar tudo por padrão (postura mais restritiva)
         scriptSrc: [
           "'self'",
-          "'unsafe-inline'",
+          // Restringir apenas aos domínios necessários para reCaptcha
           'https://www.google.com/recaptcha/',
           'https://www.gstatic.com/recaptcha/'
         ],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        connectSrc: ["'self'"],  // Permitir apenas conexões para a própria origem
+        imgSrc: ["'self'", 'data:'],  // Imagens da própria origem e data URIs
+        styleSrc: [
+          "'self'",
+          // Permitir apenas estilos inline estritamente necessários
+          'https://fonts.googleapis.com'
+        ],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'"],
-        frameSrc: ["'self'", 'https://www.google.com/recaptcha/'],
-        objectSrc: ["'none'"],
-        upgradeInsecureRequests: config.app.env === 'production' ? [] : null
+        formAction: ["'self'"],  // Formulários só podem submeter para a própria origem
+        frameSrc: [
+          "'self'",
+          'https://www.google.com/recaptcha/'
+        ],
+        objectSrc: ["'none'"],  // Bloquear <object>, <embed> e <applet>
+        baseUri: ["'self'"],  // Restringir <base> para própria origem
+        frameAncestors: ["'none'"],  // Ninguém pode usar sua aplicação em frames
+        upgradeInsecureRequests: config.app.env === 'production' ? [] : null, // Forçar HTTPS em produção
+        blockAllMixedContent: config.app.env === 'production' ? [] : null, // Bloquear conteúdo misto em produção
       }
     },
-    crossOriginEmbedderPolicy: false, // Permitir incorporação de recursos externos (reCAPTCHA)
-    xssFilter: true,
+    
+    // Cross-Origin Opener Policy
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    
+    // Cross-Origin Embedder Policy
+    // Desativado para permitir recursos de terceiros como reCAPTCHA
+    crossOriginEmbedderPolicy: false,
+    
+    // Cross-Origin Resource Policy
+    crossOriginResourcePolicy: { policy: 'same-origin' },
+    
+    // Referrer Policy
+    referrerPolicy: { 
+      policy: 'strict-origin-when-cross-origin'
+    },
+    
+    // HTTP Strict Transport Security
+    // Forçar HTTPS por 1 ano
     hsts: {
       maxAge: 31536000, // 1 ano em segundos
       includeSubDomains: true,
       preload: true
     },
+    
+    // Prevenir sniffing de MIME type
+    noSniff: true,
+    
+    // Proteção XSS
+    xssFilter: true,
+    
+    // Prevenir que a aplicação seja carregada em iframes
     frameguard: {
-      action: 'deny' // Impedir que a aplicação seja exibida em um iframe
+      action: 'deny'
     },
-    noSniff: true, // Evitar que o navegador faça sniffing do tipo MIME
-    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+    
+    // Configurações para originAgentCluster
+    originAgentCluster: true,
+    
+    // DNS Prefetch Control
+    dnsPrefetchControl: { allow: false },
+    
+    // Permissions Policy (antes Feature-Policy)
+    // Restringir acesso a APIs sensíveis do navegador
+    permissionsPolicy: {
+      features: {
+        camera: ["'none'"],
+        microphone: ["'none'"],
+        geolocation: ["'none'"],
+        payment: ["'none'"],
+        usb: ["'none'"],
+        fullscreen: ["'self'"],
+        accelerometer: ["'none'"],
+        ambientLightSensor: ["'none'"],
+        autoplay: ["'none'"],
+        battery: ["'none'"],
+        displayCapture: ["'none'"],
+        document: ["'self'"],
+        documentDomain: ["'none'"],
+        encryptedMedia: ["'none'"],
+        executionWhileNotRendered: ["'none'"],
+        executionWhileOutOfViewport: ["'none'"],
+        gyroscope: ["'none'"],
+        hid: ["'none'"],
+        idleDetection: ["'none'"],
+        magnetometer: ["'none'"],
+        midi: ["'none'"],
+        navigationOverride: ["'none'"],
+        pictureInPicture: ["'none'"],
+        serial: ["'none'"],
+        speakerSelection: ["'none'"],
+        syncXhr: ["'none'"],
+        unoptimizedImages: ["'none'"],
+        unsizedMedia: ["'none'"],
+        vibrate: ["'none'"],
+        vr: ["'none'"],
+        wakeLock: ["'none'"],
+        xr: ["'none'"]
+      }
+    }
   }),
+
+  /**
+   * Configurações para cookies
+   * Define padrões seguros para todos os cookies da aplicação
+   */
+  cookieOptions: {
+    // Opções padrão para cookies não sensíveis
+    standard: {
+      httpOnly: true, // Não acessível via JavaScript
+      secure: config.app.env === 'production', // HTTPS apenas em produção
+      sameSite: 'lax' // Protege contra CSRF, mas permite navegação normal
+    },
+    
+    // Opções para cookies sensíveis (autenticação, sessão)
+    sensitive: {
+      httpOnly: true,
+      secure: config.app.env === 'production',
+      sameSite: 'strict', // Maior proteção contra CSRF
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias (ou ajustar conforme necessário)
+      path: '/',
+      domain: undefined // Define com base no domínio atual
+    },
+    
+    // Opções específicas para token de refresh
+    refreshToken: {
+      httpOnly: true,
+      secure: config.app.env === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 dias
+      path: '/api/v1/auth', // Restrito apenas para rotas de autenticação
+      domain: undefined
+    }
+  },
 
   /**
    * Rate limiter global para todas as requisições
@@ -93,6 +207,7 @@ const securityConfig = {
 
   /**
    * Cross-Origin Resource Sharing options
+   * Configuração restritiva para CORS
    */
   corsOptions: {
     origin: (origin, callback) => {
@@ -108,8 +223,11 @@ const securityConfig = {
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Content-Length', 'X-Request-Id'],
     credentials: config.security.cors.credentials,
-    maxAge: 86400 // Cache preflight por 24 horas
+    maxAge: 86400, // Cache preflight por 24 horas
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   }
 };
 

@@ -297,3 +297,93 @@ Controllers chamam casos de uso em vez de serviços diretamente
 Os casos de uso encapsulam a lógica de negócio e usam repositórios para persistência
 
 A API está pronta para produção e mantém a paridade funcional com o código original do GitHub, apenas com uma arquitetura mais robusta e sustentável.
+
+
+# Melhorias de Segurança Implementadas
+
+Este documento descreve as melhorias de segurança implementadas na API, focando em headers de segurança robustos, Content Security Policy (CSP) e cookies seguros.
+
+## 1. Headers de Segurança Aprimorados
+
+### Implementações:
+
+- **Content Security Policy (CSP)**: Configuração restritiva que limita origens para scripts, conexões, estilos e outros recursos
+- **HTTP Strict Transport Security (HSTS)**: Força uso de HTTPS por 1 ano
+- **X-Content-Type-Options**: Impede "MIME type sniffing"
+- **X-Frame-Options**: Bloqueia carregamento da aplicação em frames/iframes
+- **Referrer-Policy**: Controla informações de referência enviadas em requisições
+- **Origin-Agent-Cluster**: Agrupa contextos de agente com base em origem
+- **Cross-Origin-Resource-Policy**: Controla quais sites podem carregar recursos da API
+- **Cross-Origin-Opener-Policy**: Isola o contexto de navegação para melhorar segurança
+- **Permissions-Policy**: Restringe uso de APIs sensíveis do navegador
+- **X-XSS-Protection**: Camada de proteção adicional contra XSS
+- **Cache-Control**: Previne armazenamento em cache de respostas sensíveis
+
+### Arquivos Alterados:
+- `src/infrastructure/security/security.config.js` (configuração central)
+- `src/interfaces/api/middlewares/index.js` (aplicação dos headers)
+
+## 2. Configuração de Cookies Seguros
+
+### Implementações:
+
+- **HttpOnly**: Impede acesso aos cookies via JavaScript
+- **Secure**: Garante transmissão apenas via HTTPS
+- **SameSite=Strict**: Previne ataques CSRF
+- **Path Restrictions**: Restringe cookies para caminhos específicos
+- **Cookies Temporários**: Configuração para cookies de sessão
+
+### Arquivos Alterados:
+- `src/infrastructure/security/security.config.js` (definição de políticas de cookie)
+- `src/interfaces/api/controllers/auth.controller.js` (aplicação nos endpoints relevantes)
+
+## 3. Proteções Adicionais
+
+### Implementações:
+
+- **Rate Limiting**: Limite de requisições por IP
+- **Speed Limiting**: Atraso progressivo para desestimular brute force
+- **Sanitização de Parâmetros**: Proteção contra Parameter Pollution
+- **Limitação de Tamanho de Payload**: Prevenção contra ataques DoS
+- **Métodos HTTP Restritos**: Apenas métodos necessários são permitidos
+
+### Arquivos Alterados:
+- `src/interfaces/api/middlewares/index.js`
+
+## Como Usar as Novas Configurações de Segurança
+
+### Para Adicionar Cookies Seguros:
+
+```javascript
+// Importar configurações de segurança
+const securityConfig = require('../../../infrastructure/security/security.config');
+
+// Usar em respostas que criam cookies
+res.cookie('nomeDoCookie', valor, securityConfig.cookieOptions.sensitive);
+
+// Para cookies menos sensíveis
+res.cookie('preferencias', valor, securityConfig.cookieOptions.standard);
+```
+
+### Considerações para Frontend:
+
+Quando implementar o frontend para esta API, considere:
+
+1. A política CSP restritiva pode exigir ajustes para compatibilidade com frameworks e bibliotecas
+2. Os cookies HttpOnly não serão acessíveis via JavaScript
+3. Com SameSite=Strict, requisições cross-site não incluirão cookies automaticamente
+
+## Próximos Passos
+
+Para fortalecer ainda mais a segurança, considere:
+
+1. Implementar validação de entrada mais rigorosa em todos os endpoints
+2. Migrar para autenticação JWT com assinaturas assímétricas (RS256)
+3. Implementar auditoria e logging mais detalhados
+4. Adicionar monitoramento para detecção de anomalias
+
+## Referências
+
+- [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/)
+- [Content Security Policy (MDN)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
+- [Cookie Security (OWASP)](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#cookies)

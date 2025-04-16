@@ -6,6 +6,7 @@ const mailService = require('../../../infrastructure/external/mail.service');
 const tokenService = require('../../../infrastructure/security/token.service');
 const twoFactorService = require('../../../infrastructure/security/two-factor.service');
 const config = require('../../../infrastructure/config');
+const securityConfig = require('../../../infrastructure/security/security.config');
 
 // Auditoria (opcional)
 let auditService;
@@ -28,9 +29,9 @@ class AuthController {
       mailService,
       auditService
     );
-    
+
     const result = await registerUseCase.execute(req.body, req.ip);
-    
+
     res.status(201).json({
       message: 'Usuário registrado com sucesso. Verifique seu e-mail para ativar a conta.',
       user: result.user
@@ -42,14 +43,14 @@ class AuthController {
    */
   async verifyEmail(req, res) {
     const { token } = req.query;
-    
+
     const verifyEmailUseCase = new VerifyEmailUseCase(
       userRepository,
       auditService
     );
-    
+
     const result = await verifyEmailUseCase.execute(token, req.ip);
-    
+
     res.status(200).json(result);
   }
 
@@ -62,7 +63,7 @@ class AuthController {
 
     // Buscar usuário por email
     const user = await userRepository.findByEmail(email);
-    
+
     // Verificar se o usuário existe e se está verificado
     if (!user || !user.verified) {
       if (auditService && user) {
@@ -74,11 +75,11 @@ class AuthController {
           details: { reason: 'Conta não verificada' }
         });
       }
-      
+
       // Não revelar se o usuário existe, apenas retornar erro genérico
       return res.status(401).json({ message: 'Credenciais inválidas' });
     }
-    
+
     // Verificar se a conta está bloqueada
     if (user.isLocked()) {
       await auditService?.log({
@@ -88,8 +89,8 @@ class AuthController {
         ipAddress,
         details: { reason: 'Conta bloqueada' }
       });
-      
-      return res.status(429).json({ 
+
+      return res.status(429).json({
         message: 'Conta temporariamente bloqueada por excesso de tentativas. Tente novamente mais tarde.',
         lockUntil: user.lockUntil
       });
@@ -97,23 +98,23 @@ class AuthController {
 
     // Verificar senha
     const isPasswordValid = await userRepository.validatePassword(user.id, password);
-    
+
     if (!isPasswordValid) {
       // Incrementar contador de falhas de login
       const updatedUser = await userRepository.incrementLoginAttempts(user.id);
-      
+
       await auditService?.log({
         action: 'LOGIN_FAILED',
         userId: user.id,
         userEmail: email,
         ipAddress,
-        details: { 
+        details: {
           reason: 'Senha inválida',
           attemptsRemaining: Math.max(0, 5 - updatedUser.loginAttempts),
           isLocked: updatedUser.isLocked()
         }
       });
-      
+
       return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
@@ -123,7 +124,7 @@ class AuthController {
     // Verificar se 2FA está ativado
     if (user.twoFactorEnabled) {
       const tempToken = tokenService.generateTempToken({ id: user.id, email: user.email });
-      
+
       await auditService?.log({
         action: 'LOGIN_2FA_REQUIRED',
         userId: user.id,
@@ -499,8 +500,8 @@ class AuthController {
       ipAddress: req.ip
     });
 
-    res.status(200).json({ 
-      message: 'Instruções de redefinição enviadas para o e-mail, se estiver cadastrado' 
+    res.status(200).json({
+      message: 'Instruções de redefinição enviadas para o e-mail, se estiver cadastrado'
     });
   }
 
@@ -512,7 +513,7 @@ class AuthController {
 
     // Buscar usuário com token válido
     const user = await userRepository.findByResetToken(token);
-    
+
     if (!user) {
       return res.status(400).json({ message: 'Token inválido ou expirado' });
     }
@@ -521,7 +522,7 @@ class AuthController {
     user.password = newPassword; // o hash será feito no repositório
     user.resetToken = null;
     user.resetTokenExpires = null;
-    
+
     await userRepository.save(user);
 
     // Registrar na auditoria
@@ -574,6 +575,110 @@ class AuthController {
     // Redirecionar para frontend com token
     const redirectUrl = `${config.oauth.google.redirectUrl}/login/oauth/success?token=${accessToken}`;
     res.redirect(redirectUrl);
+  }
+
+  // src/interfaces/api/controllers/auth.controller.js - Atualização para uso de cookies seguros
+  // Apenas os métodos que usam cookies
+
+  const securityConfig = require('../../../infrastructure/security/security.config');
+
+  /**
+   * Método para configurar o cookie do refresh token de forma segura
+   * @param {Response} res Express Response
+   * @param {string} token Refresh token
+   */
+  async login(req, res) {
+    // Código existente...
+
+    // Ao gerar o refresh token:
+    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
+
+    // Atualizar para usar as configurações seguras de cookies:
+    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
+
+    // Resto do método login...
+  }
+
+  /**
+   * Método atualizado para verificação 2FA com cookies seguros
+   */
+  async verify2FA(req, res) {
+    // Código existente...
+
+    // Ao gerar o refresh token:
+    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
+
+    // Atualizar para usar as configurações seguras de cookies:
+    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
+
+    // Resto do método verify2FA...
+  }
+
+  /**
+   * Método atualizado para verificação de código de recuperação 2FA com cookies seguros
+   */
+  async verify2FARecovery(req, res) {
+    // Código existente...
+
+    // Ao gerar o refresh token:
+    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
+
+    // Atualizar para usar as configurações seguras de cookies:
+    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
+
+    // Resto do método verify2FARecovery...
+  }
+
+  /**
+   * Método atualizado para logout seguro
+   */
+  async logout(req, res) {
+    // Código existente...
+
+    // Ao remover o cookie:
+    if (refreshToken) {
+      // Revogar refresh token
+      await tokenService.revokeRefreshToken(refreshToken, ipAddress);
+
+      // Limpar cookie com mesmas opções de segurança
+      const cookieOptions = { ...securityConfig.cookieOptions.refreshToken, maxAge: 0 };
+      res.clearCookie('refreshToken', cookieOptions);
+    }
+
+    // Resto do método logout...
+  }
+
+  /**
+   * Método atualizado para refresh token com cookies seguros
+   */
+  async refreshToken(req, res) {
+    // Código existente...
+
+    // Ao gerar novos tokens:
+    const { accessToken, refreshToken: newRefreshToken } = await tokenService.refreshTokens(
+      refreshToken,
+      ipAddress
+    );
+
+    // Atualizar cookie com configurações seguras:
+    res.cookie('refreshToken', newRefreshToken, securityConfig.cookieOptions.refreshToken);
+
+    // Resto do método refreshToken...
+  }
+
+  /**
+   * Método atualizado para callback OAuth do Google com cookies seguros
+   */
+  async googleCallback(req, res) {
+    // Código existente...
+
+    // Ao gerar o refresh token:
+    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
+
+    // Atualizar cookie com configurações seguras:
+    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
+
+    // Resto do método googleCallback...
   }
 }
 
