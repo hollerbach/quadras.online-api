@@ -5,6 +5,29 @@ const rbacRepository = require('../../../infrastructure/database/mongodb/reposit
 const logger = require('../../../infrastructure/logging/logger');
 
 /**
+ * Middleware para autorização baseada em papel clássico
+ * @param {string[]|string} roles Array de papéis permitidos
+ * @returns {Function} Middleware de autorização
+ */
+const authorize = (roles = []) => {
+  if (typeof roles === 'string') {
+    roles = [roles];
+  }
+  
+  return (req, res, next) => {
+    if (!req.user) {
+      return next(new ForbiddenError('Usuário não autenticado'));
+    }
+    
+    if (roles.length && !roles.includes(req.user.role)) {
+      return next(new ForbiddenError('Permissão negada: papel não autorizado'));
+    }
+    
+    next();
+  };
+};
+
+/**
  * Middleware para autorização baseada em papel (RBAC)
  * @param {string} permissionCode Código da permissão requerida
  * @param {Object} options Opções adicionais
@@ -72,13 +95,6 @@ const requirePermission = (permissionCode, options = {}) => {
   };
 };
 
-module.exports = {
-  requirePermission,
-  hasRole,
-  hasScopedRole,
-  authorize // Para compatibilidade com o código existente
-};
-
 /**
  * Middleware para verificar se o usuário tem pelo menos um dos papéis especificados
  * @param {Array|string} roles Array de papéis ou nome do papel
@@ -131,29 +147,6 @@ const hasRole = (roles) => {
       logger.error(`Erro na verificação de papel: ${error.message}`);
       return next(new ForbiddenError('Erro ao verificar papéis'));
     }
-  };
-};
-
-/**
- * Para compatibilidade com o código atual - Middleware para autorização baseada em papel clássico
- * @param {string[]|string} roles Array de papéis permitidos
- * @returns {Function} Middleware de autorização
- */
-const authorize = (roles = []) => {
-  if (typeof roles === 'string') {
-    roles = [roles];
-  }
-  
-  return (req, res, next) => {
-    if (!req.user) {
-      return next(new ForbiddenError('Usuário não autenticado'));
-    }
-    
-    if (roles.length && !roles.includes(req.user.role)) {
-      return next(new ForbiddenError('Permissão negada: papel não autorizado'));
-    }
-    
-    next();
   };
 };
 
@@ -218,4 +211,12 @@ const hasScopedRole = (roleName, scope, getScopeId) => {
       return next(new ForbiddenError('Erro ao verificar papéis'));
     }
   };
+};
+
+// Exportação dos middlewares
+module.exports = {
+  authorize,
+  requirePermission,
+  hasRole,
+  hasScopedRole
 };
