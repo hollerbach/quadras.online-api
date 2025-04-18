@@ -580,8 +580,6 @@ class AuthController {
   // src/interfaces/api/controllers/auth.controller.js - Atualização para uso de cookies seguros
   // Apenas os métodos que usam cookies
 
-  const securityConfig = require('../../../infrastructure/security/security.config');
-
   /**
    * Método para configurar o cookie do refresh token de forma segura
    * @param {Response} res Express Response
