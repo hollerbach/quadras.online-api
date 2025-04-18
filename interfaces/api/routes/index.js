@@ -7,6 +7,7 @@ const healthController = require('../controllers/health.controller');
 // Importar rotas de domínios
 const authRoutes = require('./auth.routes');
 const userRoutes = require('./user.routes');
+const rbacRoutes = require('./rbac.routes');
 // Futuros domínios
 // const productRoutes = require('./product.routes');
 // const orderRoutes = require('./order.routes');
@@ -41,6 +42,9 @@ const setupRoutes = (app) => {
   
   // Montar as rotas de usuários
   app.use(`${apiPrefix}/users`, userRoutes);
+  
+  // Montar as rotas de RBAC
+  app.use(`${apiPrefix}/rbac`, rbacRoutes);
 
   // Preparado para futuros domínios
   // app.use(`${apiPrefix}/products`, productRoutes);
