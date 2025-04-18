@@ -16,6 +16,8 @@ tags:
     description: Gerenciamento de usuários
   - name: Admin
     description: Operações administrativas
+  - name: RBAC
+    description: Role-Based Access Control para gerenciamento de permissões
 
 paths:
   /auth/register:
@@ -783,3 +785,835 @@ components:
                 type: string
               message:
                 type: string
+
+  # Rotas para gerenciamento de papéis (roles)
+  /rbac/roles:
+    post:
+      summary: Criar novo papel
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreate'
+      responses:
+        '201':
+          description: Papel criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Permissão negada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Papel já existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Listar todos os papéis
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+          description: Quantidade de itens por página
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: name
+          description: Campo para ordenação
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Ordem da ordenação
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Termo de busca (aplicado ao nome e descrição)
+        - in: query
+          name: isSystem
+          schema:
+            type: boolean
+          description: Filtrar por papéis do sistema
+      responses:
+        '200':
+          description: Lista de papéis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '403':
+          description: Permissão negada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /rbac/roles/{id}:
+    get:
+      summary: Obter papel por ID
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID do papel
+      responses:
+        '200':
+          description: Detalhes do papel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '404':
+          description: Papel não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Atualizar papel por ID
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID do papel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleUpdate'
+      responses:
+        '200':
+          description: Papel atualizado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Papel não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Remover papel por ID
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID do papel
+      responses:
+        '200':
+          description: Papel removido com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Papel removido com sucesso
+        '400':
+          description: Não é possível excluir papel do sistema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Papel não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Rotas para gerenciamento de permissões
+  /rbac/permissions:
+    post:
+      summary: Criar nova permissão
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionCreate'
+      responses:
+        '201':
+          description: Permissão criada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Permissão já existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Listar todas as permissões
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Número da página
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+          description: Quantidade de itens por página
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: name
+          description: Campo para ordenação
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Ordem da ordenação
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Termo de busca (aplicado ao nome, código e descrição)
+        - in: query
+          name: category
+          schema:
+            type: string
+            enum: [user, product, order, delivery, report, system]
+          description: Filtrar por categoria
+      responses:
+        '200':
+          description: Lista de permissões
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Permission'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '403':
+          description: Permissão negada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /rbac/permissions/{id}:
+    get:
+      summary: Obter permissão por ID
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID da permissão
+      responses:
+        '200':
+          description: Detalhes da permissão
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '404':
+          description: Permissão não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Atualizar permissão por ID
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID da permissão
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionUpdate'
+      responses:
+        '200':
+          description: Permissão atualizada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '400':
+          description: Dados inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Permissão não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Remover permissão por ID
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+          description: ID da permissão
+      responses:
+        '200':
+          description: Permissão removida com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Permissão removida com sucesso
+        '400':
+          description: Não é possível excluir permissão em uso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Permissão não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Rotas para gerenciamento da relação entre papéis e permissões
+  /rbac/roles/{roleId}/permissions/{permissionId}:
+    post:
+      summary: Adicionar permissão a um papel
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: roleId
+          schema:
+            type: string
+          required: true
+          description: ID do papel
+        - in: path
+          name: permissionId
+          schema:
+            type: string
+          required: true
+          description: ID da permissão
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resources:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      resource:
+                        type: string
+                        description: ID do recurso
+                      conditions:
+                        type: object
+                        description: Condições de acesso ao recurso
+                  description: Lista de recursos associados à permissão
+      responses:
+        '200':
+          description: Permissão adicionada ao papel com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '404':
+          description: Papel ou permissão não encontrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Remover permissão de um papel
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: roleId
+          schema:
+            type: string
+          required: true
+          description: ID do papel
+        - in: path
+          name: permissionId
+          schema:
+            type: string
+          required: true
+          description: ID da permissão
+      responses:
+        '200':
+          description: Permissão removida do papel com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '404':
+          description: Papel ou permissão não encontrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Rotas para gerenciamento da relação entre usuários e papéis
+  /rbac/users/{userId}/roles/{roleId}:
+    post:
+      summary: Atribuir papel a um usuário
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+          required: true
+          description: ID do usuário
+        - in: path
+          name: roleId
+          schema:
+            type: string
+          required: true
+          description: ID do papel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  type: string
+                  enum: [global, store, department]
+                  default: global
+                  description: Escopo do papel
+                scopeId:
+                  type: string
+                  description: ID do contexto do escopo (obrigatório para escopos não-globais)
+      responses:
+        '200':
+          description: Papel atribuído ao usuário com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Papel atribuído com sucesso
+                  user:
+                    $ref: '#/components/schemas/UserDetails'
+        '404':
+          description: Usuário ou papel não encontrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Remover papel de um usuário
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+          required: true
+          description: ID do usuário
+        - in: path
+          name: roleId
+          schema:
+            type: string
+          required: true
+          description: ID do papel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  type: string
+                  enum: [global, store, department]
+                  default: global
+                  description: Escopo do papel
+                scopeId:
+                  type: string
+                  description: ID do contexto do escopo (necessário para escopos não-globais)
+      responses:
+        '200':
+          description: Papel removido do usuário com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Papel removido com sucesso
+                  user:
+                    $ref: '#/components/schemas/UserDetails'
+        '404':
+          description: Usuário, papel ou atribuição não encontrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /rbac/users/{userId}/roles:
+    get:
+      summary: Listar papéis de um usuário
+      tags:
+        - RBAC
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+          required: true
+          description: ID do usuário
+      responses:
+        '200':
+          description: Lista de papéis do usuário
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+                  roles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        role:
+                          $ref: '#/components/schemas/Role'
+                        assignedAt:
+                          type: string
+                          format: date-time
+                        assignedBy:
+                          type: string
+                          description: ID do usuário que atribuiu o papel
+                        scope:
+                          type: string
+                          enum: [global, store, department]
+                        scopeId:
+                          type: string
+                          description: ID do contexto do escopo
+        '404':
+          description: Usuário não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    # Modelos atualizados/adicionados para RBAC
+    UserDetails:
+      allOf:
+        - $ref: '#/components/schemas/UserProfile'
+        - type: object
+          properties:
+            active:
+              type: boolean
+            failedLoginAttempts:
+              type: integer
+            lockUntil:
+              type: string
+              format: date-time
+              nullable: true
+            roles:
+              type: array
+              items:
+                type: object
+                properties:
+                  role:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                  scope:
+                    type: string
+                    enum: [global, store, department]
+                  scopeId:
+                    type: string
+                    nullable: true
+                  assignedAt:
+                    type: string
+                    format: date-time
+                  
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        isSystem:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            type: object
+            properties:
+              permission:
+                $ref: '#/components/schemas/Permission'
+              resources:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    resource:
+                      $ref: '#/components/schemas/Resource'
+                    conditions:
+                      type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RoleCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "editor"
+        description:
+          type: string
+          example: "Editor com acesso para criar e editar conteúdo"
+        isSystem:
+          type: boolean
+          default: false
+      required: [name, description]
+
+    RoleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    Permission:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [user, product, order, delivery, report, system]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PermissionCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Editar Produtos"
+        code:
+          type: string
+          example: "PRODUCT_EDIT"
+        description:
+          type: string
+          example: "Permissão para editar produtos existentes"
+        category:
+          type: string
+          enum: [user, product, order, delivery, report, system]
+          example: "product"
+      required: [name, code, description, category]
+
+    PermissionUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [user, product, order, delivery, report, system]
+
+    Resource:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [route, entity, feature, report, menu]
+        path:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total de registros
+        page:
+          type: integer
+          description: Página atual
+        pages:
+          type: integer
+          description: Total de páginas
+        limit:
+          type: integer
+          description: Itens por página
