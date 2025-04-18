@@ -1,6 +1,6 @@
 # Mercearia Digital API
 
-Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa (Clean Architecture) e Domain-Driven Design (DDD), com suporte a autenticação em dois fatores, verificação de e-mail, OAuth 2.0, RBAC e todas as melhores práticas de segurança.
+Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa (Clean Architecture) e Domain-Driven Design (DDD), com suporte a autenticação em dois fatores, verificação de e-mail, OAuth 2.0, RBAC avançado e todas as melhores práticas de segurança.
 
 ## Características
 
@@ -8,6 +8,7 @@ Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa 
   - Separação clara entre domínios funcionais
   - Independência de frameworks
   - Camadas bem definidas: Domain, Application, Infrastructure, Interfaces
+  - Padrão de Factory para injeção de dependências
   - Fácil adição de novos domínios funcionais
 
 - **Autenticação Segura**
@@ -17,6 +18,13 @@ Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa 
   - Rate limiting para proteção contra ataques de força bruta
   - Verificação de e-mail
   - Redefinição de senha segura
+
+- **Controle de Acesso Baseado em Papéis (RBAC)**
+  - Sistema completo de papéis (roles) e permissões
+  - Granularidade ao nível de recursos individuais
+  - Suporte para papéis com escopo (global, store, department)
+  - Herança de permissões
+  - Fácil extensão para novos recursos e permissões
 
 - **Segurança**
   - Proteção contra CSRF
@@ -28,13 +36,14 @@ Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa 
 - **Design Patterns**
   - Repository Pattern
   - Use Case Pattern
-  - Dependency Injection
   - Factory Pattern
+  - Dependency Injection
   - Adapter Pattern
 
 - **Domínios**
   - Autenticação (implementado)
   - Usuários (implementado)
+  - RBAC (implementado)
   - Produtos (estrutura preparada)
   - Pedidos (estrutura preparada)
   - Entregas (estrutura preparada)
@@ -55,7 +64,13 @@ Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa 
       /repositories       # Interfaces para acesso a dados
       /use-cases          # Casos de uso do domínio
       /services           # Serviços específicos do domínio
+      /factories          # Factories para criação de casos de uso
     /users                # Domínio de usuários
+      /entities
+      /repositories
+      /use-cases
+      /services
+    /rbac                 # Domínio de controle de acesso
       /entities
       /repositories
       /use-cases
@@ -84,6 +99,7 @@ Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa 
       /two-factor         # Serviço de autenticação em dois fatores
     /logging              # Serviço de logging
     /config               # Configurações da aplicação
+    /monitoring           # Serviço de monitoramento de saúde da aplicação
   
   /interfaces             # Adaptadores para o mundo externo
     /api                  # API REST
@@ -146,6 +162,25 @@ npm run dev
 npm start
 ```
 
+## Inicialização do Sistema RBAC
+
+Para inicializar o sistema RBAC com dados básicos:
+
+```bash
+# Em ambiente de desenvolvimento
+NODE_ENV=development node scripts/seed-rbac.js
+
+# Em ambiente de produção
+NODE_ENV=production node scripts/seed-rbac.js
+```
+
+Isso criará:
+- Papéis básicos (admin, gerente, vendedor, estoquista, cliente)
+- Permissões por domínio (usuários, produtos, pedidos, etc.)
+- Recursos do sistema (rotas da API, menus, etc.)
+- Atribuirá permissões aos papéis
+- Atualizará usuários existentes para o novo modelo RBAC
+
 ## Variáveis de Ambiente
 
 Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis:
@@ -187,27 +222,49 @@ GOOGLE_CLIENT_SECRET=seu_google_client_secret
 
 ## API Endpoints
 
+### Autenticação e Usuários
+
 | Método | Endpoint                          | Descrição                      |
 | ------ | --------------------------------- | ------------------------------ |
-| POST   | /api/auth/register                | Registrar novo usuário         |
-| GET    | /api/auth/verify-email            | Verificar e-mail               |
-| POST   | /api/auth/login                   | Login de usuário               |
-| GET    | /api/auth/google                  | Iniciar login com Google       |
-| GET    | /api/auth/google/callback         | Callback do login com Google   |
-| POST   | /api/auth/refresh-token           | Renovar tokens                 |
-| POST   | /api/auth/logout                  | Logout (invalidar tokens)      |
-| POST   | /api/auth/2fa/setup               | Configurar 2FA                 |
-| POST   | /api/auth/2fa/verify              | Verificar token 2FA            |
-| POST   | /api/auth/2fa/disable             | Desativar 2FA                  |
-| POST   | /api/auth/password-reset/request  | Solicitar redefinição de senha |
-| POST   | /api/auth/password-reset/confirm  | Confirmar redefinição de senha |
-| GET    | /api/users/profile                | Obter perfil do usuário        |
-| PUT    | /api/users/profile                | Atualizar perfil               |
-| PUT    | /api/users/password               | Alterar senha                  |
-| GET    | /api/users                        | Listar usuários (admin)        |
-| GET    | /api/users/:id                    | Obter usuário por ID (admin)   |
-| PUT    | /api/users/:id                    | Atualizar usuário (admin)      |
-| DELETE | /api/users/:id                    | Desativar usuário (admin)      |
+| POST   | /api/v1/auth/register             | Registrar novo usuário         |
+| GET    | /api/v1/auth/verify-email         | Verificar e-mail               |
+| POST   | /api/v1/auth/login                | Login de usuário               |
+| GET    | /api/v1/auth/google               | Iniciar login com Google       |
+| GET    | /api/v1/auth/google/callback      | Callback do login com Google   |
+| POST   | /api/v1/auth/refresh-token        | Renovar tokens                 |
+| POST   | /api/v1/auth/logout               | Logout (invalidar tokens)      |
+| POST   | /api/v1/auth/2fa/setup            | Configurar 2FA                 |
+| POST   | /api/v1/auth/2fa/verify           | Verificar token 2FA            |
+| POST   | /api/v1/auth/2fa/disable          | Desativar 2FA                  |
+| POST   | /api/v1/auth/password-reset/request | Solicitar redefinição de senha |
+| POST   | /api/v1/auth/password-reset/confirm | Confirmar redefinição de senha |
+| GET    | /api/v1/users/profile             | Obter perfil do usuário        |
+| PUT    | /api/v1/users/profile             | Atualizar perfil               |
+| PUT    | /api/v1/users/password            | Alterar senha                  |
+| GET    | /api/v1/users                     | Listar usuários (admin)        |
+| GET    | /api/v1/users/:id                 | Obter usuário por ID (admin)   |
+| PUT    | /api/v1/users/:id                 | Atualizar usuário (admin)      |
+| DELETE | /api/v1/users/:id                 | Desativar usuário (admin)      |
+
+### RBAC (Controle de Acesso)
+
+| Método | Endpoint                          | Descrição                      |
+| ------ | --------------------------------- | ------------------------------ |
+| GET    | /api/v1/rbac/roles                | Listar papéis                  |
+| POST   | /api/v1/rbac/roles                | Criar papel                    |
+| GET    | /api/v1/rbac/roles/:id            | Obter papel por ID             |
+| PUT    | /api/v1/rbac/roles/:id            | Atualizar papel                |
+| DELETE | /api/v1/rbac/roles/:id            | Remover papel                  |
+| GET    | /api/v1/rbac/permissions          | Listar permissões              |
+| POST   | /api/v1/rbac/permissions          | Criar permissão                |
+| GET    | /api/v1/rbac/permissions/:id      | Obter permissão por ID         |
+| PUT    | /api/v1/rbac/permissions/:id      | Atualizar permissão            |
+| DELETE | /api/v1/rbac/permissions/:id      | Remover permissão              |
+| POST   | /api/v1/rbac/roles/:roleId/permissions/:permissionId | Adicionar permissão a papel |
+| DELETE | /api/v1/rbac/roles/:roleId/permissions/:permissionId | Remover permissão de papel |
+| POST   | /api/v1/rbac/users/:userId/roles/:roleId | Atribuir papel a usuário |
+| DELETE | /api/v1/rbac/users/:userId/roles/:roleId | Remover papel de usuário |
+| GET    | /api/v1/rbac/users/:userId/roles  | Listar papéis de um usuário    |
 
 ## Documentação da API
 
@@ -269,11 +326,47 @@ Para adicionar um novo domínio funcional (como produtos, pedidos, etc.):
 2. É processada por middlewares (`/interfaces/api/middlewares`)
 3. O controller (`/interfaces/api/controllers`) recebe a requisição
 4. Os dados são validados (`/interfaces/api/validators`)
-5. O controller chama um caso de uso (`/domain/*/use-cases`)
-6. O caso de uso implementa a lógica de negócio usando repositórios
+5. O controller chama um caso de uso via factory (`/domain/*/factories`)
+6. O caso de uso implementa a lógica de negócio usando repositórios e serviços
 7. Os repositórios (`/domain/*/repositories`) são interfaces implementadas na infraestrutura
 8. O resultado volta pelo mesmo caminho, transformado pelo controller
 9. A resposta HTTP é enviada ao cliente
+
+## Uso do Sistema RBAC
+
+Para verificar permissões nos seus controllers e rotas:
+
+```javascript
+// Verificar uma permissão específica
+router.get(
+  '/products',
+  requirePermission('PRODUCT_VIEW'),
+  asyncHandler(productController.getAllProducts)
+);
+
+// Verificar uma permissão para um recurso específico
+router.put(
+  '/products/:id',
+  requirePermission('PRODUCT_EDIT', {
+    resourcePath: '/api/v1/products/:id'
+  }),
+  asyncHandler(productController.updateProduct)
+);
+
+// Verificar se o usuário tem um papel específico
+router.post(
+  '/orders/:id/payment',
+  hasRole('gerente'),
+  asyncHandler(orderController.processPayment)
+);
+
+// Verificar se o usuário tem um papel com escopo específico
+router.get(
+  '/stores/:storeId/reports',
+  hasScopedRole('gerente', 'store', req => req.params.storeId),
+  asyncHandler(reportController.getStoreReports)
+);
+```
 
 ## Contribuição
 
@@ -288,285 +381,3 @@ Para adicionar um novo domínio funcional (como produtos, pedidos, etc.):
 ## Licença
 
 Este projeto está licenciado sob a [Licença ISC](LICENSE).
-
-
-Todos os endpoints originais continuam funcionando, porém agora são processados através das camadas bem definidas da arquitetura limpa:
-
-Routes → Controllers → Use Cases → Repositories
-Controllers chamam casos de uso em vez de serviços diretamente
-Os casos de uso encapsulam a lógica de negócio e usam repositórios para persistência
-
-A API está pronta para produção e mantém a paridade funcional com o código original do GitHub, apenas com uma arquitetura mais robusta e sustentável.
-
-
-# Melhorias de Segurança Implementadas
-
-Este documento descreve as melhorias de segurança implementadas na API, focando em headers de segurança robustos, Content Security Policy (CSP) e cookies seguros.
-
-## 1. Headers de Segurança Aprimorados
-
-### Implementações:
-
-- **Content Security Policy (CSP)**: Configuração restritiva que limita origens para scripts, conexões, estilos e outros recursos
-- **HTTP Strict Transport Security (HSTS)**: Força uso de HTTPS por 1 ano
-- **X-Content-Type-Options**: Impede "MIME type sniffing"
-- **X-Frame-Options**: Bloqueia carregamento da aplicação em frames/iframes
-- **Referrer-Policy**: Controla informações de referência enviadas em requisições
-- **Origin-Agent-Cluster**: Agrupa contextos de agente com base em origem
-- **Cross-Origin-Resource-Policy**: Controla quais sites podem carregar recursos da API
-- **Cross-Origin-Opener-Policy**: Isola o contexto de navegação para melhorar segurança
-- **Permissions-Policy**: Restringe uso de APIs sensíveis do navegador
-- **X-XSS-Protection**: Camada de proteção adicional contra XSS
-- **Cache-Control**: Previne armazenamento em cache de respostas sensíveis
-
-### Arquivos Alterados:
-- `src/infrastructure/security/security.config.js` (configuração central)
-- `src/interfaces/api/middlewares/index.js` (aplicação dos headers)
-
-## 2. Configuração de Cookies Seguros
-
-### Implementações:
-
-- **HttpOnly**: Impede acesso aos cookies via JavaScript
-- **Secure**: Garante transmissão apenas via HTTPS
-- **SameSite=Strict**: Previne ataques CSRF
-- **Path Restrictions**: Restringe cookies para caminhos específicos
-- **Cookies Temporários**: Configuração para cookies de sessão
-
-### Arquivos Alterados:
-- `src/infrastructure/security/security.config.js` (definição de políticas de cookie)
-- `src/interfaces/api/controllers/auth.controller.js` (aplicação nos endpoints relevantes)
-
-## 3. Proteções Adicionais
-
-### Implementações:
-
-- **Rate Limiting**: Limite de requisições por IP
-- **Speed Limiting**: Atraso progressivo para desestimular brute force
-- **Sanitização de Parâmetros**: Proteção contra Parameter Pollution
-- **Limitação de Tamanho de Payload**: Prevenção contra ataques DoS
-- **Métodos HTTP Restritos**: Apenas métodos necessários são permitidos
-
-### Arquivos Alterados:
-- `src/interfaces/api/middlewares/index.js`
-
-## Como Usar as Novas Configurações de Segurança
-
-### Para Adicionar Cookies Seguros:
-
-```javascript
-// Importar configurações de segurança
-const securityConfig = require('../../../infrastructure/security/security.config');
-
-// Usar em respostas que criam cookies
-res.cookie('nomeDoCookie', valor, securityConfig.cookieOptions.sensitive);
-
-// Para cookies menos sensíveis
-res.cookie('preferencias', valor, securityConfig.cookieOptions.standard);
-```
-
-### Considerações para Frontend:
-
-Quando implementar o frontend para esta API, considere:
-
-1. A política CSP restritiva pode exigir ajustes para compatibilidade com frameworks e bibliotecas
-2. Os cookies HttpOnly não serão acessíveis via JavaScript
-3. Com SameSite=Strict, requisições cross-site não incluirão cookies automaticamente
-
-## Próximos Passos
-
-Para fortalecer ainda mais a segurança, considere:
-
-1. Implementar validação de entrada mais rigorosa em todos os endpoints
-2. Migrar para autenticação JWT com assinaturas assímétricas (RS256)
-3. Implementar auditoria e logging mais detalhados
-4. Adicionar monitoramento para detecção de anomalias
-
-## Referências
-
-- [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/)
-- [Content Security Policy (MDN)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
-- [Cookie Security (OWASP)](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#cookies)
-
-
-# Validação de Entrada e Segurança de API
-
-Este documento detalha a implementação de validação e sanitização avançada para a API da Mercearia Digital, oferecendo proteção contra injeções e outras vulnerabilidades relacionadas a entrada de dados.
-
-## 1. Sistema de Validação Implementado
-
-O novo sistema de validação implementa múltiplas camadas de proteção:
-
-### 1.1 Validação Baseada em Schema
-
-Cada endpoint da API tem um schema de validação específico que define:
-- Campos obrigatórios e opcionais
-- Tipos de dados permitidos
-- Limites de tamanho para strings, arrays e objetos
-- Padrões (regex) para validação de formato
-- Relações entre campos (ex: confirmação de senha)
-
-### 1.2 Sanitização de Entrada
-
-Todos os dados recebidos passam por:
-- **Sanitização XSS**: Remoção de código JavaScript malicioso
-- **Sanitização NoSQL**: Prevenção de injeção em MongoDB
-- **Escape HTML**: Conversão de caracteres HTML especiais
-- **Normalização**: Uniformização de formatos (ex: email)
-
-### 1.3 Limites Rigorosos
-
-Implementados limites para prevenir ataques DoS:
-- Limites de tamanho para strings (máx. 1000 caracteres por padrão)
-- Limites para arrays (máx. 100 itens por padrão)
-- Limites para objetos aninhados (máx. 10 níveis de profundidade)
-- Limites para campos específicos (ex: nome max. 100 caracteres)
-
-### 1.4 Validações Específicas por Domínio
-
-Validações específicas para cada domínio funcional:
-- **Autenticação**: Força de senha, unicidade de email
-- **Usuários**: Limites para campos de perfil, permissões
-- **Outros domínios**: Validações específicas quando implementados
-
-## 2. Como Funciona
-
-### 2.1 Fluxo de Validação
-
-```
-Request → Sanitização Global → Limite de Payload → 
-Validações Específicas → Sanitização por Campo → 
-Verificação de Resultados → Controller
-```
-
-### 2.2 Tipos de Validação
-
-**Validações Síncronas**:
-- Verificação de tipo (string, número, etc.)
-- Verificação de comprimento e tamanho
-- Verificação de padrão (regex)
-- Relações entre campos
-
-**Validações Assíncronas**:
-- Verificação de existência na base de dados
-- Verificação de unicidade (ex: email)
-- Validações com serviços externos
-
-### 2.3 Tratamento de Erros
-
-- Mensagens de erro específicas e claras
-- Agrupamento de múltiplos erros de validação
-- Redação das mensagens sem revelar detalhes de implementação
-- Ocultação de dados sensíveis nos logs de erro
-
-## 3. Implementação por Componente
-
-### 3.1 Middleware de Validação
-
-```javascript
-// src/interfaces/api/middlewares/validation.middleware.js
-// Provê funções reutilizáveis para validação e sanitização
-```
-
-Funções principais:
-- `validate()`: Processa resultados da validação
-- `sanitizeInputs()`: Sanitiza todos os inputs
-- `limitPayloadSize()`: Verifica limites de tamanho
-- `validators`: Biblioteca de validadores reutilizáveis
-- `createValidator()`: Cria cadeias de validação
-
-### 3.2 Schemas de Validação por Domínio
-
-```javascript
-// src/interfaces/api/validators/auth.validator.js
-// Schemas específicos para autenticação
-
-// src/interfaces/api/validators/user.validator.js
-// Schemas específicos para usuários
-```
-
-Cada schema contém:
-- Validadores encadeados para cada campo
-- Sanitizadores específicos
-- Validações personalizadas
-- Limitadores de tamanho
-
-### 3.3 Integração nas Rotas
-
-```javascript
-// src/interfaces/api/routes/auth.routes.js
-router.post('/register', validate('register'), asyncHandler(authController.register));
-```
-
-## 4. Boas Práticas Implementadas
-
-- **Princípio de Falha Segura**: Rejeita por padrão, aceita apenas o que é explicitamente permitido
-- **Validação no Servidor**: Mesmo que exista validação no cliente
-- **Validação Positiva**: Define o que é permitido em vez do que é proibido
-- **Sanitização Dupla**: Em nível global e em nível de campo
-- **Limites Estritos**: Para todos os tipos de dados
-- **Mensagens de Erro Seguras**: Sem revelar detalhes de implementação
-
-## 5. Como Estender
-
-### 5.1 Adicionando Novos Schemas
-
-1. Crie um novo arquivo em `src/interfaces/api/validators/` para seu domínio
-2. Defina schemas usando a API do express-validator e os validators comuns
-3. Exporte funções de validação através da função `validate()`
-
-### 5.2 Adicionando Validadores Personalizados
-
-```javascript
-// Exemplo de validador personalizado
-const customValidator = (value) => {
-  // Lógica de validação
-  if (!isValid(value)) {
-    throw new Error('Mensagem de erro');
-  }
-  return true;
-};
-
-// Uso em schema
-body('campo').custom(customValidator)
-```
-
-### 5.3 Adicionando Sanitizadores Personalizados
-
-```javascript
-// Exemplo de sanitizador personalizado
-const customSanitizer = (value) => {
-  // Lógica de sanitização
-  return sanitizedValue;
-};
-
-// Uso em schema
-body('campo').customSanitizer(customSanitizer)
-```
-
-## 6. Testes
-
-A validação rigorosa deve ser testada para garantir que:
-
-1. Entradas válidas são aceitas
-2. Entradas inválidas são rejeitadas com mensagens apropriadas
-3. Ataques conhecidos são bloqueados
-4. Limites são aplicados corretamente
-5. Sanitização funciona conforme esperado
-
-Recomenda-se:
-- Testes unitários para cada validador
-- Testes de integração para schemas completos
-- Testes de segurança (fuzzing) para encontrar falhas
-
-## 7. Considerações Finais
-
-Este sistema de validação é uma linha de defesa crítica, mas deve ser complementado com:
-
-- Testes de penetração regulares
-- Revisões de código com foco em segurança
-- Atualizações de dependências
-- Monitoramento de falhas de validação
-- Educação contínua sobre novos vetores de ataque
-
-A validação de entrada é uma das medidas mais eficazes para prevenir vulnerabilidades como injeção de código, XSS e outros ataques da lista OWASP Top 10.

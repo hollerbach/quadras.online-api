@@ -1,12 +1,12 @@
 // src/interfaces/api/controllers/auth.controller.js
-const RegisterUserUseCase = require('../../../domain/auth/use-cases/register-user.use-case');
-const VerifyEmailUseCase = require('../../../domain/auth/use-cases/verify-email.use-case');
+const AuthUseCaseFactory = require('../../../domain/auth/factories/auth-use-case.factory');
 const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
 const mailService = require('../../../infrastructure/external/mail.service');
 const tokenService = require('../../../infrastructure/security/token.service');
 const twoFactorService = require('../../../infrastructure/security/two-factor.service');
 const config = require('../../../infrastructure/config');
 const securityConfig = require('../../../infrastructure/security/security.config');
+const crypto = require('crypto');
 
 // Auditoria (opcional)
 let auditService;
@@ -24,12 +24,7 @@ class AuthController {
    * Registra um novo usuário
    */
   async register(req, res) {
-    const registerUseCase = new RegisterUserUseCase(
-      userRepository,
-      mailService,
-      auditService
-    );
-
+    const registerUseCase = AuthUseCaseFactory.createRegisterUserUseCase();
     const result = await registerUseCase.execute(req.body, req.ip);
 
     res.status(201).json({
@@ -43,12 +38,7 @@ class AuthController {
    */
   async verifyEmail(req, res) {
     const { token } = req.query;
-
-    const verifyEmailUseCase = new VerifyEmailUseCase(
-      userRepository,
-      auditService
-    );
-
+    const verifyEmailUseCase = AuthUseCaseFactory.createVerifyEmailUseCase();
     const result = await verifyEmailUseCase.execute(token, req.ip);
 
     res.status(200).json(result);
@@ -149,12 +139,7 @@ class AuthController {
     const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
 
     // Definir cookie HTTP-only para refresh token
-    res.cookie('refreshToken', refreshToken.token, {
-      httpOnly: true,
-      secure: config.app.env === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
-    });
+    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
 
     // Registrar na auditoria
     await auditService?.log({
@@ -178,61 +163,17 @@ class AuthController {
     const { token, tempToken } = req.body;
     const ipAddress = req.ip;
 
-    // Verificar e decodificar o token temporário
-    const decoded = tokenService.verifyAccessToken(tempToken);
-
-    if (!decoded || !decoded.is2FA) {
-      return res.status(400).json({ message: 'Token temporário inválido' });
-    }
-
-    const user = await userRepository.findById(decoded.id);
-
-    if (!user || !user.twoFactorEnabled) {
-      return res.status(400).json({ message: '2FA não está habilitado para este usuário' });
-    }
-
-    // Verificar o token TOTP
-    const verified = twoFactorService.verifyToken(user.twoFactorSecret, token);
-
-    if (!verified) {
-      await auditService?.log({
-        action: 'LOGIN_2FA_FAILED',
-        userId: user.id,
-        userEmail: user.email,
-        ipAddress
-      });
-
-      return res.status(401).json({ message: 'Código 2FA inválido' });
-    }
-
-    // Gerar tokens para usuário autenticado com 2FA
-    const accessToken = tokenService.generateAccessToken({
-      id: user.id,
-      email: user.email,
-      role: user.role
-    });
-
-    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
+    // Usar caso de uso para verificação 2FA
+    const verify2FAUseCase = AuthUseCaseFactory.createVerify2FAUseCase();
+    const result = await verify2FAUseCase.execute(token, tempToken, ipAddress);
 
     // Definir cookie HTTP-only para refresh token
-    res.cookie('refreshToken', refreshToken.token, {
-      httpOnly: true,
-      secure: config.app.env === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
-    });
+    res.cookie('refreshToken', result.refreshToken, securityConfig.cookieOptions.refreshToken);
 
-    // Registrar na auditoria
-    await auditService?.log({
-      action: 'LOGIN_2FA_SUCCESS',
-      userId: user.id,
-      userEmail: user.email,
-      ipAddress
-    });
-
+    // Retornar apenas o token de acesso e usuário (não o refresh token)
     res.status(200).json({
-      accessToken,
-      user: user.toSafeObject()
+      accessToken: result.accessToken,
+      user: result.user
     });
   }
 
@@ -283,12 +224,7 @@ class AuthController {
     const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
 
     // Definir cookie HTTP-only para refresh token
-    res.cookie('refreshToken', refreshToken.token, {
-      httpOnly: true,
-      secure: config.app.env === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
-    });
+    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
 
     // Registrar na auditoria
     await auditService?.log({
@@ -389,36 +325,13 @@ class AuthController {
     const refreshToken = req.cookies.refreshToken;
     const ipAddress = req.ip;
 
-    if (token) {
-      // Obter payload do token sem verificar assinatura
-      const decoded = tokenService.decodeToken(token);
+    // Usar caso de uso para logout
+    const logoutUseCase = AuthUseCaseFactory.createLogoutUseCase();
+    await logoutUseCase.execute(token, refreshToken, req.user, ipAddress);
 
-      // Adicionar à blacklist pelo tempo restante de validade
-      if (decoded.exp) {
-        const timeToExpire = decoded.exp - Math.floor(Date.now() / 1000);
-        await tokenService.blacklistToken(
-          token,
-          'access',
-          timeToExpire > 0 ? timeToExpire : 3600
-        );
-      }
-    }
-
-    if (refreshToken) {
-      // Revogar refresh token
-      await tokenService.revokeRefreshToken(refreshToken, ipAddress);
-
-      // Limpar cookie
-      res.clearCookie('refreshToken');
-    }
-
-    // Registrar na auditoria
-    await auditService?.log({
-      action: 'LOGOUT',
-      userId: req.user?.id,
-      userEmail: req.user?.email,
-      ipAddress
-    });
+    // Limpar cookie
+    const cookieOptions = { ...securityConfig.cookieOptions.refreshToken, maxAge: 0 };
+    res.clearCookie('refreshToken', cookieOptions);
 
     res.status(200).json({ message: 'Logout realizado com sucesso' });
   }
@@ -430,37 +343,14 @@ class AuthController {
     const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
     const ipAddress = req.ip;
 
-    if (!refreshToken) {
-      return res.status(400).json({ message: 'Refresh token é obrigatório' });
-    }
-
-    // Gerar novos tokens
-    const { accessToken, refreshToken: newRefreshToken } = await tokenService.refreshTokens(
-      refreshToken,
-      ipAddress
-    );
+    // Usar caso de uso para refresh de tokens
+    const refreshTokensUseCase = AuthUseCaseFactory.createRefreshTokensUseCase();
+    const result = await refreshTokensUseCase.execute(refreshToken, ipAddress);
 
     // Atualizar cookie
-    res.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: config.app.env === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
-    });
+    res.cookie('refreshToken', result.refreshToken, securityConfig.cookieOptions.refreshToken);
 
-    // Registrar na auditoria
-    // Obter payload do token para registrar usuário
-    const decoded = tokenService.decodeToken(accessToken);
-    if (decoded && decoded.id) {
-      await auditService?.log({
-        action: 'TOKEN_REFRESH',
-        userId: decoded.id,
-        userEmail: decoded.email,
-        ipAddress
-      });
-    }
-
-    res.status(200).json({ accessToken });
+    res.status(200).json({ accessToken: result.accessToken });
   }
 
   /**
@@ -557,12 +447,7 @@ class AuthController {
     const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
 
     // Definir cookie HTTP-only para refresh token
-    res.cookie('refreshToken', refreshToken.token, {
-      httpOnly: true,
-      secure: config.app.env === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
-    });
+    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
 
     // Registrar na auditoria
     await auditService?.log({
@@ -575,108 +460,6 @@ class AuthController {
     // Redirecionar para frontend com token
     const redirectUrl = `${config.oauth.google.redirectUrl}/login/oauth/success?token=${accessToken}`;
     res.redirect(redirectUrl);
-  }
-
-  // src/interfaces/api/controllers/auth.controller.js - Atualização para uso de cookies seguros
-  // Apenas os métodos que usam cookies
-
-  /**
-   * Método para configurar o cookie do refresh token de forma segura
-   * @param {Response} res Express Response
-   * @param {string} token Refresh token
-   */
-  async login(req, res) {
-    // Código existente...
-
-    // Ao gerar o refresh token:
-    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
-
-    // Atualizar para usar as configurações seguras de cookies:
-    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
-
-    // Resto do método login...
-  }
-
-  /**
-   * Método atualizado para verificação 2FA com cookies seguros
-   */
-  async verify2FA(req, res) {
-    // Código existente...
-
-    // Ao gerar o refresh token:
-    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
-
-    // Atualizar para usar as configurações seguras de cookies:
-    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
-
-    // Resto do método verify2FA...
-  }
-
-  /**
-   * Método atualizado para verificação de código de recuperação 2FA com cookies seguros
-   */
-  async verify2FARecovery(req, res) {
-    // Código existente...
-
-    // Ao gerar o refresh token:
-    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
-
-    // Atualizar para usar as configurações seguras de cookies:
-    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
-
-    // Resto do método verify2FARecovery...
-  }
-
-  /**
-   * Método atualizado para logout seguro
-   */
-  async logout(req, res) {
-    // Código existente...
-
-    // Ao remover o cookie:
-    if (refreshToken) {
-      // Revogar refresh token
-      await tokenService.revokeRefreshToken(refreshToken, ipAddress);
-
-      // Limpar cookie com mesmas opções de segurança
-      const cookieOptions = { ...securityConfig.cookieOptions.refreshToken, maxAge: 0 };
-      res.clearCookie('refreshToken', cookieOptions);
-    }
-
-    // Resto do método logout...
-  }
-
-  /**
-   * Método atualizado para refresh token com cookies seguros
-   */
-  async refreshToken(req, res) {
-    // Código existente...
-
-    // Ao gerar novos tokens:
-    const { accessToken, refreshToken: newRefreshToken } = await tokenService.refreshTokens(
-      refreshToken,
-      ipAddress
-    );
-
-    // Atualizar cookie com configurações seguras:
-    res.cookie('refreshToken', newRefreshToken, securityConfig.cookieOptions.refreshToken);
-
-    // Resto do método refreshToken...
-  }
-
-  /**
-   * Método atualizado para callback OAuth do Google com cookies seguros
-   */
-  async googleCallback(req, res) {
-    // Código existente...
-
-    // Ao gerar o refresh token:
-    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
-
-    // Atualizar cookie com configurações seguras:
-    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
-
-    // Resto do método googleCallback...
   }
 }
 
