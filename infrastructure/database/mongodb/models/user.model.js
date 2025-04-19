@@ -48,12 +48,14 @@ const userSchema = new mongoose.Schema(
         default: null
       }
     }],
+
     // Manter o campo role para compatibilidade retroativa
     role: {
       type: String,
-      enum: ['user', 'admin'],
+      enum: ['user', 'support', 'admin'],
       default: 'user'
     },
+
     verified: {
       type: Boolean,
       default: false
