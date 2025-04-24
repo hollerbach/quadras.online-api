@@ -20,6 +20,8 @@ router.put(
   asyncHandler(userController.updateProfile)
 );
 
+router.get('/me', asyncHandler(userController.getMe));
+
 // Aplicar limite de taxa para mudança de senha (operação sensível)
 router.put(
   '/password',

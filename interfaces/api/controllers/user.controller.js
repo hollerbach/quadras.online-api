@@ -8,6 +8,22 @@ const logger = require('../../../infrastructure/logging/logger');
  */
 class UserController {
   /**
+   * Valida JWT do usuário atual
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
+   */
+  async getMe(req, res) {
+    const userId = req.user.id;
+    const user = await userRepository.findById(userId);
+
+    if (!user) {
+      throw new UserNotFoundError('Usuário não encontrado');
+    }
+
+    res.status(200).json(user.toSafeObject());
+  }
+
+  /**
    * Obtém o perfil do usuário atual
    * @param {Request} req Express Request
    * @param {Response} res Express Response

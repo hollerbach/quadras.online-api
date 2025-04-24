@@ -238,6 +238,7 @@ GOOGLE_CLIENT_SECRET=seu_google_client_secret
 | POST   | /api/auth/2fa/disable          | Desativar 2FA                  |
 | POST   | /api/auth/password-reset/request | Solicitar redefinição de senha |
 | POST   | /api/auth/password-reset/confirm | Confirmar redefinição de senha |
+| GET    | /api/users/me                  | Validar JWT do usuário         |
 | GET    | /api/users/profile             | Obter perfil do usuário        |
 | PUT    | /api/users/profile             | Atualizar perfil               |
 | PUT    | /api/users/password            | Alterar senha                  |

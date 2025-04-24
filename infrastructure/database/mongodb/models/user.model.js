@@ -23,6 +23,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true
     },
+    active: {
+      type: Boolean,
+      default: true
+    },
     // Sistema RBAC - Múltiplos papéis em vez de papel único
     roles: [{
       role: {
@@ -48,18 +52,6 @@ const userSchema = new mongoose.Schema(
         default: null
       }
     }],
-    verified: {
-      type: Boolean,
-      default: false
-    },
-    active: {
-      type: Boolean,
-      default: true
-    },
-    verifyToken: String,
-    verifyTokenExpires: Date,
-    resetToken: String,
-    resetTokenExpires: Date,
     twoFactorEnabled: {
       type: Boolean,
       default: false
@@ -84,14 +76,14 @@ const userSchema = new mongoose.Schema(
         }
       }
     ],
-    name: {
-      type: String,
-      trim: true
+    verified: {
+      type: Boolean,
+      default: false
     },
-    surname: {
-      type: String,
-      trim: true
-    },
+    verifyToken: String,
+    verifyTokenExpires: Date,
+    resetToken: String,
+    resetTokenExpires: Date,
     lastLogin: Date,
     failedLoginAttempts: {
       type: Number,
