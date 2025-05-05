@@ -12,7 +12,7 @@ const securityConfig = require('../../../infrastructure/security/security.config
 router.use(authenticate);
 
 // Endpoint leve para validação de token
-router.post('/me', asyncHandler(userController.validateToken));
+router.get('/me', asyncHandler(userController.validateToken));
 
 // Rotas de perfil (para usuário autenticado)
 router.get('/profile', asyncHandler(userController.getProfile));
