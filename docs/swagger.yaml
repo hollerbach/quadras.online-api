@@ -381,6 +381,42 @@ paths:
         '302':
           description: Redirecionamento para frontend com token de acesso
 
+  /users/me:
+    post:
+      summary: Validar token de autenticação (endpoint leve)
+      description: Endpoint para validação rápida do token sem busca no banco de dados
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token válido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    example: true
+                  userId:
+                    type: string
+                    description: ID do usuário autenticado
+                  email:
+                    type: string
+                    format: email
+                    description: Email do usuário autenticado
+                  role:
+                    type: string
+                    description: Papel do usuário no sistema
+        '401':
+          description: Token inválido ou expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /users/profile:
     get:
       summary: Obter perfil do usuário atual

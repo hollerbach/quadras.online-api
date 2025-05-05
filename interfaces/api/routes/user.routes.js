@@ -11,6 +11,9 @@ const securityConfig = require('../../../infrastructure/security/security.config
 // Aplicar autenticação para todas as rotas de usuário
 router.use(authenticate);
 
+// Endpoint leve para validação de token
+router.post('/me', asyncHandler(userController.validateToken));
+
 // Rotas de perfil (para usuário autenticado)
 router.get('/profile', asyncHandler(userController.getProfile));
 
@@ -28,7 +31,6 @@ router.put(
   asyncHandler(userController.changePassword)
 );
 
-// Rotas administrativas (requerem role de admin)
 // Adicionar autorização RBAC
 router.get(
   '/',

@@ -77,9 +77,11 @@ class TokenService {
    * @returns {Promise<boolean>} Verdadeiro se o token estiver na blacklist
    */
   async isTokenBlacklisted(token) {
+    // Add debug logging to see if the token is being checked
+    console.log('Checking if token is blacklisted:', token?.substring(0, 10) + '...');
     return await authRepository.isTokenBlacklisted(token);
   }
-
+  
   /**
    * Adiciona um token à blacklist
    * @param {string} token Token a ser invalidado

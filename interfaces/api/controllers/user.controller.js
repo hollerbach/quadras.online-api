@@ -8,6 +8,21 @@ const logger = require('../../../infrastructure/logging/logger');
  */
 class UserController {
   /**
+ * Valida o token do usuário (endpoint leve)
+ * @param {Request} req Express Request
+ * @param {Response} res Express Response
+ */
+async validateToken(req, res) {
+  // Como o middleware de autenticação já verificou o token,
+  // se chegou aqui é porque o token é válido
+  res.status(200).json({
+    valid: true,
+    userId: req.user.id,
+    email: req.user.email,
+    role: req.user.role
+  });
+}  
+  /**
    * Obtém o perfil do usuário atual
    * @param {Request} req Express Request
    * @param {Response} res Express Response

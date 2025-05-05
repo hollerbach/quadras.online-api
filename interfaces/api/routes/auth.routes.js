@@ -36,6 +36,7 @@ router.post(
   validate('requestPasswordReset'),
   asyncHandler(authController.requestPasswordReset)
 );
+
 router.post(
   '/password-reset/confirm',
   securityConfig.sensitiveRateLimit,
