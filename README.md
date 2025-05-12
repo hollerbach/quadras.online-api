@@ -1,6 +1,6 @@
-# Mercearia Digital API
+# Agendamento de Quadras Online API
 
-Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa (Clean Architecture) e Domain-Driven Design (DDD), com suporte a autenticação em dois fatores, verificação de e-mail, OAuth 2.0, RBAC avançado e todas as melhores práticas de segurança.
+Backend para o sistema de Agendamento de Quadras, implementado com arquitetura limpa (Clean Architecture) e Domain-Driven Design (DDD), com suporte a autenticação em dois fatores, verificação de e-mail, OAuth 2.0, RBAC avançado e todas as melhores práticas de segurança.
 
 ## Características
 
@@ -44,9 +44,11 @@ Backend para o sistema da Mercearia Digital, implementado com arquitetura limpa 
   - Autenticação (implementado)
   - Usuários (implementado)
   - RBAC (implementado)
-  - Produtos (estrutura preparada)
-  - Pedidos (estrutura preparada)
-  - Entregas (estrutura preparada)
+  - Reservas (estrutura preparada)
+  - Pagamentos (estrutura preparada)
+  - Painel Analitico (estrutura preparada)
+  - Financeiro (estrutura preparada)
+  - Lojas (estrutura preparada)
 
 - **Confiabilidade**
   - Testes automatizados
