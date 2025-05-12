@@ -176,7 +176,7 @@ userSchema.methods.setRecoveryCodes = async function (codes) {
 };
 
 // Métodos RBAC - Verificar permissões
-userSchema.methods.hasPermission = async function(permissionCode, resourcePath = null) {
+userSchema.methods.hasPermission = async function (permissionCode, resourcePath = null) {
   const populated = await this.populate({
     path: 'roles.role',
     populate: {
@@ -187,16 +187,16 @@ userSchema.methods.hasPermission = async function(permissionCode, resourcePath =
 
   for (const roleAssignment of populated.roles) {
     const role = roleAssignment.role;
-    
+
     for (const permissionEntry of role.permissions) {
       const permission = permissionEntry.permission;
-      
+
       if (permission.code === permissionCode) {
         // Se não precisamos verificar um recurso específico, a permissão está concedida
         if (!resourcePath) {
           return true;
         }
-        
+
         // Se temos um recurso específico, verificar se está autorizado
         for (const resourceEntry of permissionEntry.resources) {
           if (resourceEntry.resource && resourceEntry.resource.path === resourcePath) {
@@ -206,25 +206,25 @@ userSchema.methods.hasPermission = async function(permissionCode, resourcePath =
       }
     }
   }
-  
+
   return false;
 };
 
 // Método para atribuir um papel ao usuário
-userSchema.methods.assignRole = async function(roleId, options = {}) {
+userSchema.methods.assignRole = async function (roleId, options = {}) {
   const { scope = 'global', scopeId = null, assignedBy = null } = options;
-  
+
   // Verificar se o papel já está atribuído com o mesmo escopo
-  const existingRole = this.roles.find(r => 
-    r.role.toString() === roleId.toString() && 
-    r.scope === scope && 
+  const existingRole = this.roles.find(r =>
+    r.role.toString() === roleId.toString() &&
+    r.scope === scope &&
     (scopeId === null || r.scopeId && r.scopeId.toString() === scopeId.toString())
   );
-  
+
   if (existingRole) {
     return false; // Papel já atribuído
   }
-  
+
   // Adicionar o novo papel
   this.roles.push({
     role: roleId,
@@ -233,33 +233,33 @@ userSchema.methods.assignRole = async function(roleId, options = {}) {
     scope: scope,
     scopeId: scopeId
   });
-  
+
   await this.save();
   return true;
 };
 
 // Método para remover um papel do usuário
-userSchema.methods.removeRole = async function(roleId, options = {}) {
+userSchema.methods.removeRole = async function (roleId, options = {}) {
   const { scope = 'global', scopeId = null } = options;
-  
+
   const initialLength = this.roles.length;
-  
-  this.roles = this.roles.filter(r => 
-    r.role.toString() !== roleId.toString() || 
-    r.scope !== scope || 
+
+  this.roles = this.roles.filter(r =>
+    r.role.toString() !== roleId.toString() ||
+    r.scope !== scope ||
     (scopeId !== null && (!r.scopeId || r.scopeId.toString() !== scopeId.toString()))
   );
-  
+
   if (this.roles.length !== initialLength) {
     await this.save();
     return true;
   }
-  
+
   return false; // Papel não encontrado
 };
 
 // Método para obter todos os papéis do usuário
-userSchema.methods.getRoles = async function() {
+userSchema.methods.getRoles = async function () {
   return await this.populate('roles.role');
 };
 
@@ -268,6 +268,30 @@ userSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
+
+// Método para verificações complexas
+userSchema.methods.validateState = function (options = {}) {
+  const { requireVerified = true, requireActive = true, checkLocked = true } = options;
+
+  const errors = [];
+
+  if (requireActive && !this.active) {
+    errors.push('Conta desativada');
+  }
+
+  if (requireVerified && !this.verified) {
+    errors.push('Conta não verificada');
+  }
+
+  if (checkLocked && this.isLocked()) {
+    errors.push('Conta temporariamente bloqueada');
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
+};
 
 // Índices para melhorar performance de consultas
 userSchema.index({ uuid: 1 });

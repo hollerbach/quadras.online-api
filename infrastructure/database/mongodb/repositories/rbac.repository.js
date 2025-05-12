@@ -1,10 +1,10 @@
 // src/infrastructure/database/mongodb/repositories/rbac.repository.js
 const { Role, Permission, Resource } = require('../models/rbac.models');
+const User = require('../models/user.model');
 const RbacRepositoryInterface = require('../../../../domain/rbac/repositories/rbac-repository.interface');
 const { NotFoundError } = require('../../../../shared/errors/api-error');
 const logger = require('../../../logging/logger');
-
-
+const permissionCache = require('../../../cache/permission-cache');
 
 /**
  * Implementação MongoDB do repositório RBAC
@@ -89,18 +89,7 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       } = options;
       
       // Construir filtro de busca
-      const query = {};
-      
-      if (search) {
-        query.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } }
-        ];
-      }
-      
-      if (isSystem !== null) {
-        query.isSystem = isSystem;
-      }
+      const query = this._buildRoleFilterQuery(search, isSystem);
       
       // Configurar ordenação
       const sortOption = {};
@@ -125,12 +114,7 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       // Retornar resultado paginado
       return {
         roles: roleObjects,
-        pagination: {
-          total,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          pages: Math.ceil(total / limit)
-        }
+        pagination: this._buildPaginationData(total, page, limit)
       };
     } catch (error) {
       logger.error(`Erro ao listar papéis: ${error.message}`);
@@ -155,6 +139,9 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       if (!role) {
         throw new NotFoundError('Papel não encontrado');
       }
+      
+      // Invalidar cache de permissões relacionadas a este papel
+      await this._invalidateRoleCache(id);
       
       return role.toObject();
     } catch (error) {
@@ -181,7 +168,22 @@ class MongoRbacRepository extends RbacRepositoryInterface {
         throw new Error('Não é possível remover um papel do sistema');
       }
       
+      // Buscar usuários que têm este papel
+      const usersWithRole = await User.find({
+        'roles.role': id
+      });
+      
+      // Remover o papel desses usuários
+      for (const user of usersWithRole) {
+        user.roles = user.roles.filter(r => r.role.toString() !== id);
+        await user.save();
+      }
+      
       await Role.deleteOne({ _id: id });
+      
+      // Invalidar cache de permissões relacionadas a este papel
+      await this._invalidateRoleCache(id);
+      
       return true;
     } catch (error) {
       logger.error(`Erro ao remover papel: ${error.message}`);
@@ -251,19 +253,7 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       } = options;
       
       // Construir filtro de busca
-      const query = {};
-      
-      if (search) {
-        query.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { code: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } }
-        ];
-      }
-      
-      if (category) {
-        query.category = category;
-      }
+      const query = this._buildPermissionFilterQuery(search, category);
       
       // Configurar ordenação
       const sortOption = {};
@@ -284,12 +274,7 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       // Retornar resultado paginado
       return {
         permissions: permissionObjects,
-        pagination: {
-          total,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          pages: Math.ceil(total / limit)
-        }
+        pagination: this._buildPaginationData(total, page, limit)
       };
     } catch (error) {
       logger.error(`Erro ao listar permissões: ${error.message}`);
@@ -314,6 +299,9 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       if (!permission) {
         throw new NotFoundError('Permissão não encontrada');
       }
+      
+      // Invalidar cache de permissões relacionadas
+      permissionCache.invalidateAll();
       
       return permission.toObject();
     } catch (error) {
@@ -345,6 +333,10 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       }
       
       await Permission.deleteOne({ _id: id });
+      
+      // Invalidar cache de permissões relacionadas
+      permissionCache.invalidateAll();
+      
       return true;
     } catch (error) {
       logger.error(`Erro ao remover permissão: ${error.message}`);
@@ -414,19 +406,7 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       } = options;
       
       // Construir filtro de busca
-      const query = {};
-      
-      if (search) {
-        query.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { path: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } }
-        ];
-      }
-      
-      if (type) {
-        query.type = type;
-      }
+      const query = this._buildResourceFilterQuery(search, type);
       
       // Configurar ordenação
       const sortOption = {};
@@ -447,12 +427,7 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       // Retornar resultado paginado
       return {
         resources: resourceObjects,
-        pagination: {
-          total,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          pages: Math.ceil(total / limit)
-        }
+        pagination: this._buildPaginationData(total, page, limit)
       };
     } catch (error) {
       logger.error(`Erro ao listar recursos: ${error.message}`);
@@ -477,6 +452,9 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       if (!resource) {
         throw new NotFoundError('Recurso não encontrado');
       }
+      
+      // Invalidar cache de permissões relacionadas
+      permissionCache.invalidateAll();
       
       return resource.toObject();
     } catch (error) {
@@ -508,6 +486,10 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       }
       
       await Resource.deleteOne({ _id: id });
+      
+      // Invalidar cache de permissões relacionadas
+      permissionCache.invalidateAll();
+      
       return true;
     } catch (error) {
       logger.error(`Erro ao remover recurso: ${error.message}`);
@@ -542,24 +524,7 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       );
       
       // Preparar os recursos
-      const resourceEntries = [];
-      
-      for (const resourceData of resources) {
-        let resourceId = resourceData.resource;
-        let resourceObj = null;
-        
-        // Verificar se o recurso existe
-        resourceObj = await Resource.findById(resourceId);
-        
-        if (!resourceObj) {
-          throw new NotFoundError(`Recurso ${resourceId} não encontrado`);
-        }
-        
-        resourceEntries.push({
-          resource: resourceId,
-          conditions: resourceData.conditions || {}
-        });
-      }
+      const resourceEntries = await this._prepareResourceEntries(resources);
       
       // Se a permissão já existe, atualizar os recursos
       if (existingPermissionIndex >= 0) {
@@ -573,6 +538,10 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       }
       
       await role.save();
+      
+      // Invalidar cache de permissões relacionadas a este papel
+      await this._invalidateRoleCache(roleId);
+      
       return role.toObject();
     } catch (error) {
       logger.error(`Erro ao adicionar permissão ao papel: ${error.message}`);
@@ -600,6 +569,10 @@ class MongoRbacRepository extends RbacRepositoryInterface {
       );
       
       await role.save();
+      
+      // Invalidar cache de permissões relacionadas a este papel
+      await this._invalidateRoleCache(roleId);
+      
       return role.toObject();
     } catch (error) {
       logger.error(`Erro ao remover permissão do papel: ${error.message}`);
@@ -616,6 +589,14 @@ class MongoRbacRepository extends RbacRepositoryInterface {
    */
   async roleHasPermission(roleId, permissionCode, resourcePath = null) {
     try {
+      // Verificar no cache primeiro
+      const cacheKey = `role:${roleId}:${permissionCode}:${resourcePath || 'global'}`;
+      const cachedResult = permissionCache.get(cacheKey);
+      
+      if (cachedResult !== undefined) {
+        return cachedResult;
+      }
+      
       // Buscar o papel com suas permissões
       const role = await Role.findById(roleId)
         .populate({
@@ -628,6 +609,7 @@ class MongoRbacRepository extends RbacRepositoryInterface {
         });
       
       if (!role) {
+        permissionCache.set(cacheKey, false);
         return false;
       }
       
@@ -636,24 +618,263 @@ class MongoRbacRepository extends RbacRepositoryInterface {
         if (permissionEntry.permission.code === permissionCode) {
           // Se não precisamos verificar um recurso específico, a permissão está concedida
           if (!resourcePath) {
+            permissionCache.set(cacheKey, true);
             return true;
           }
           
           // Se temos um recurso específico, verificar se está autorizado
           for (const resourceEntry of permissionEntry.resources) {
             if (resourceEntry.resource && resourceEntry.resource.path === resourcePath) {
+              permissionCache.set(cacheKey, true);
               return true;
             }
           }
         }
       }
       
+      permissionCache.set(cacheKey, false);
       return false;
     } catch (error) {
       logger.error(`Erro ao verificar permissão do papel: ${error.message}`);
       return false;
     }
   }
+
+  /**
+   * Verifica se um usuário tem uma permissão específica
+   * @param {string} userId ID do usuário
+   * @param {string} permissionCode Código da permissão
+   * @param {string|null} resourcePath Caminho do recurso (opcional)
+   * @returns {Promise<boolean>} Verdadeiro se o usuário tem a permissão
+   */
+  async userHasPermission(userId, permissionCode, resourcePath = null) {
+    try {
+      // Verificar no cache primeiro
+      const cacheKey = `user:${userId}:${permissionCode}:${resourcePath || 'global'}`;
+      const cachedResult = permissionCache.get(cacheKey);
+      
+      if (cachedResult !== undefined) {
+        return cachedResult;
+      }
+      
+      // Buscar usuário com seus papéis
+      const user = await User.findById(userId);
+      
+      if (!user) {
+        permissionCache.set(cacheKey, false);
+        return false;
+      }
+      
+      // Compatibilidade com o sistema antigo - verificar papel global
+      if (user.role === 'admin') {
+        permissionCache.set(cacheKey, true);
+        return true;
+      }
+      
+      // Verificar permissão através de papéis
+      if (user.roles && user.roles.length > 0) {
+        for (const roleAssignment of user.roles) {
+          const roleId = roleAssignment.role;
+          const hasPermission = await this.roleHasPermission(
+            roleId,
+            permissionCode,
+            resourcePath
+          );
+          
+          if (hasPermission) {
+            permissionCache.set(cacheKey, true);
+            return true;
+          }
+        }
+      }
+      
+      permissionCache.set(cacheKey, false);
+      return false;
+    } catch (error) {
+      logger.error(`Erro ao verificar permissão do usuário: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Obtém todos os papéis de um usuário
+   * @param {string} userId ID do usuário
+   * @returns {Promise<Array>} Lista de papéis do usuário
+   */
+  async getUserRoles(userId) {
+    try {
+      const user = await User.findById(userId).populate({
+        path: 'roles.role',
+        model: 'Role'
+      });
+      
+      if (!user) {
+        return [];
+      }
+      
+      return user.roles.map(roleAssignment => ({
+        role: roleAssignment.role,
+        scope: roleAssignment.scope,
+        scopeId: roleAssignment.scopeId,
+        assignedAt: roleAssignment.assignedAt
+      }));
+    } catch (error) {
+      logger.error(`Erro ao obter papéis do usuário: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Invalida o cache de permissões relacionadas a um papel
+   * @private
+   * @param {string} roleId ID do papel
+   */
+  async _invalidateRoleCache(roleId) {
+    try {
+      // Buscar usuários que tenham este papel
+      const usersWithRole = await User.find({
+        'roles.role': roleId
+      }).select('_id');
+      
+      // Invalidar cache para cada usuário
+      for (const user of usersWithRole) {
+        permissionCache.invalidateUser(user._id);
+      }
+      
+      // Limpar caches específicos do papel
+      const keys = permissionCache.getAllKeys();
+      const roleKeys = keys.filter(key => key.startsWith(`role:${roleId}:`));
+      permissionCache.deleteKeys(roleKeys);
+    } catch (error) {
+      logger.error(`Erro ao invalidar cache de papel: ${error.message}`);
+    }
+  }
+
+  /**
+   * Prepara entradas de recursos para adicionar a um papel
+   * @private
+   * @param {Array} resources Lista de dados de recursos
+   * @returns {Promise<Array>} Lista de entradas de recursos processadas
+   */
+  async _prepareResourceEntries(resources) {
+    const resourceEntries = [];
+    
+    for (const resourceData of resources) {
+      let resourceId = resourceData.resource;
+      let resourceObj = null;
+      
+      // Verificar se o recurso existe
+      resourceObj = await Resource.findById(resourceId);
+      
+      if (!resourceObj) {
+        throw new NotFoundError(`Recurso ${resourceId} não encontrado`);
+      }
+      
+      resourceEntries.push({
+        resource: resourceId,
+        conditions: resourceData.conditions || {}
+      });
+    }
+    
+    return resourceEntries;
+  }
+
+  /**
+   * Constrói objeto de dados de paginação
+   * @private
+   * @param {number} total Total de registros
+   * @param {number} page Página atual
+   * @param {number} limit Itens por página
+   * @returns {Object} Dados de paginação
+   */
+  _buildPaginationData(total, page, limit) {
+    return {
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      pages: Math.ceil(total / limit)
+    };
+  }
+
+  /**
+   * Constrói query de filtro para papéis
+   * @private
+   * @param {string|null} search Termo de busca
+   * @param {boolean|null} isSystem Filtro para papéis do sistema
+   * @returns {Object} Query de filtro
+   */
+  _buildRoleFilterQuery(search, isSystem) {
+    const query = {};
+    
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    if (isSystem !== null) {
+      query.isSystem = isSystem;
+    }
+    
+    return query;
+  }
+
+  /**
+   * Constrói query de filtro para permissões
+   * @private
+   * @param {string|null} search Termo de busca
+   * @param {string|null} category Categoria
+   * @returns {Object} Query de filtro
+   */
+  _buildPermissionFilterQuery(search, category) {
+    const query = {};
+    
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { code: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    if (category) {
+      query.category = category;
+    }
+    
+    return query;
+  }
+
+  /**
+   * Constrói query de filtro para recursos
+   * @private
+   * @param {string|null} search Termo de busca
+   * @param {string|null} type Tipo de recurso
+   * @returns {Object} Query de filtro
+   */
+  _buildResourceFilterQuery(search, type) {
+    const query = {};
+    
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { path: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    if (type) {
+      query.type = type;
+    }
+    
+    return query;
+  }
 }
 
+// Adicionar métodos ao protótipo para permitir expansão futura
+MongoRbacRepository.prototype.getAllCachedPermissions = async function() {
+  return permissionCache.getStats();
+};
+
+// Exportar uma instância singleton
 module.exports = new MongoRbacRepository();

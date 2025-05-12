@@ -4,8 +4,6 @@ const VerifyEmailUseCase = require('../use-cases/verify-email.use-case');
 const Verify2FAUseCase = require('../use-cases/verify-2fa.use-case');
 const LogoutUseCase = require('../use-cases/logout.use-case');
 const RefreshTokensUseCase = require('../use-cases/refresh-tokens.use-case');
-
-// Importar outros casos de uso que podem ser necessários
 const RequestPasswordResetUseCase = require('../use-cases/request-password-reset.use-case');
 const ResetPasswordUseCase = require('../use-cases/reset-password.use-case');
 const Setup2FAUseCase = require('../use-cases/setup-2fa.use-case');
@@ -20,6 +18,7 @@ const authRepository = require('../../../infrastructure/database/mongodb/reposit
 const mailService = require('../../../infrastructure/external/mail.service');
 const tokenService = require('../../../infrastructure/security/token.service');
 const twoFactorService = require('../../../infrastructure/security/two-factor.service');
+const authService = require('../../../infrastructure/security/auth.service');
 
 // Auditoria (opcional)
 let auditService;
@@ -43,6 +42,7 @@ class AuthUseCaseFactory {
     return new RegisterUserUseCase(
       customDeps.userRepository || userRepository,
       customDeps.mailService || mailService,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
   }
@@ -55,6 +55,7 @@ class AuthUseCaseFactory {
   static createVerifyEmailUseCase(customDeps = {}) {
     return new VerifyEmailUseCase(
       customDeps.userRepository || userRepository,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
   }
@@ -68,6 +69,7 @@ class AuthUseCaseFactory {
     return new LoginUseCase(
       customDeps.userRepository || userRepository,
       customDeps.tokenService || tokenService,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
   }
@@ -82,6 +84,7 @@ class AuthUseCaseFactory {
       customDeps.userRepository || userRepository,
       customDeps.tokenService || tokenService,
       customDeps.twoFactorService || twoFactorService,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
   }
@@ -96,6 +99,7 @@ class AuthUseCaseFactory {
       customDeps.userRepository || userRepository,
       customDeps.twoFactorService || twoFactorService,
       customDeps.mailService || mailService,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
   }
@@ -109,6 +113,7 @@ class AuthUseCaseFactory {
     return new Disable2FAUseCase(
       customDeps.userRepository || userRepository,
       customDeps.twoFactorService || twoFactorService,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
   }
@@ -121,6 +126,7 @@ class AuthUseCaseFactory {
   static createLogoutUseCase(customDeps = {}) {
     return new LogoutUseCase(
       customDeps.tokenService || tokenService,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
   }
@@ -133,6 +139,7 @@ class AuthUseCaseFactory {
   static createRefreshTokensUseCase(customDeps = {}) {
     return new RefreshTokensUseCase(
       customDeps.tokenService || tokenService,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
   }
@@ -146,6 +153,7 @@ class AuthUseCaseFactory {
     return new RequestPasswordResetUseCase(
       customDeps.userRepository || userRepository,
       customDeps.mailService || mailService,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
   }
@@ -158,8 +166,63 @@ class AuthUseCaseFactory {
   static createResetPasswordUseCase(customDeps = {}) {
     return new ResetPasswordUseCase(
       customDeps.userRepository || userRepository,
+      customDeps.authService || authService,
       customDeps.auditService || auditService
     );
+  }
+
+  /**
+   * Recupera o serviço de autenticação
+   * @param {Object} customDeps Dependências personalizadas (para testes)
+   * @returns {Object} Serviço de autenticação
+   */
+  static getAuthService(customDeps = {}) {
+    return customDeps.authService || authService;
+  }
+
+  /**
+   * Recupera o serviço de token
+   * @param {Object} customDeps Dependências personalizadas (para testes)
+   * @returns {Object} Serviço de token
+   */
+  static getTokenService(customDeps = {}) {
+    return customDeps.tokenService || tokenService;
+  }
+
+  /**
+   * Recupera o serviço de 2FA
+   * @param {Object} customDeps Dependências personalizadas (para testes)
+   * @returns {Object} Serviço de 2FA
+   */
+  static getTwoFactorService(customDeps = {}) {
+    return customDeps.twoFactorService || twoFactorService;
+  }
+
+  /**
+   * Recupera o repositório de usuário
+   * @param {Object} customDeps Dependências personalizadas (para testes)
+   * @returns {Object} Repositório de usuário
+   */
+  static getUserRepository(customDeps = {}) {
+    return customDeps.userRepository || userRepository;
+  }
+
+  /**
+   * Recupera o repositório de autenticação
+   * @param {Object} customDeps Dependências personalizadas (para testes)
+   * @returns {Object} Repositório de autenticação
+   */
+  static getAuthRepository(customDeps = {}) {
+    return customDeps.authRepository || authRepository;
+  }
+
+  /**
+   * Recupera o serviço de auditoria
+   * @param {Object} customDeps Dependências personalizadas (para testes)
+   * @returns {Object} Serviço de auditoria
+   */
+  static getAuditService(customDeps = {}) {
+    return customDeps.auditService || auditService;
   }
 }
 

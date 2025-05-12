@@ -1,12 +1,13 @@
 // src/interfaces/api/controllers/auth.controller.js
 const AuthUseCaseFactory = require('../../../domain/auth/factories/auth-use-case.factory');
 const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
-const mailService = require('../../../infrastructure/external/mail.service');
+const authService = require('../../../infrastructure/security/auth.service');
 const tokenService = require('../../../infrastructure/security/token.service');
 const twoFactorService = require('../../../infrastructure/security/two-factor.service');
 const config = require('../../../infrastructure/config');
 const securityConfig = require('../../../infrastructure/security/security.config');
-const crypto = require('crypto');
+const logger = require('../../../infrastructure/logging/logger');
+const { BadRequestError, UnauthorizedError } = require('../../../shared/errors/api-error');
 
 // Auditoria (opcional)
 let auditService;
@@ -18,12 +19,16 @@ try {
 
 /**
  * Controlador para rotas de autenticação
+ * Responsável por orquestrar os casos de uso e transformar seus resultados em respostas HTTP
  */
 class AuthController {
   /**
    * Registra um novo usuário
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async register(req, res) {
+    // Usar caso de uso através da factory para seguir o padrão DI
     const registerUseCase = AuthUseCaseFactory.createRegisterUserUseCase();
     const result = await registerUseCase.execute(req.body, req.ip);
 
@@ -35,9 +40,16 @@ class AuthController {
 
   /**
    * Verifica o e-mail do usuário
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async verifyEmail(req, res) {
     const { token } = req.query;
+    
+    if (!token) {
+      throw new BadRequestError('Token de verificação não fornecido');
+    }
+    
     const verifyEmailUseCase = AuthUseCaseFactory.createVerifyEmailUseCase();
     const result = await verifyEmailUseCase.execute(token, req.ip);
 
@@ -46,82 +58,26 @@ class AuthController {
 
   /**
    * Autentica um usuário
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async login(req, res) {
     const { email, password } = req.body;
     const ipAddress = req.ip;
 
-    // Buscar usuário por email
-    const user = await userRepository.findByEmail(email);
-
-    // Verificar se o usuário existe e se está verificado
-    if (!user || !user.verified) {
-      if (auditService && user) {
-        await auditService.log({
-          action: 'LOGIN_FAILED',
-          userId: user.id,
-          userEmail: email,
-          ipAddress,
-          details: { reason: 'Conta não verificada' }
-        });
-      }
-
-      // Não revelar se o usuário existe, apenas retornar erro genérico
-      return res.status(401).json({ message: 'Credenciais inválidas' });
-    }
-
-    // Verificar se a conta está bloqueada
-    if (user.isLocked()) {
-      await auditService?.log({
-        action: 'LOGIN_FAILED',
-        userId: user.id,
-        userEmail: email,
-        ipAddress,
-        details: { reason: 'Conta bloqueada' }
-      });
-
-      return res.status(429).json({
-        message: 'Conta temporariamente bloqueada por excesso de tentativas. Tente novamente mais tarde.',
-        lockUntil: user.lockUntil
-      });
-    }
-
-    // Verificar senha
-    const isPasswordValid = await userRepository.validatePassword(user.id, password);
-
-    if (!isPasswordValid) {
-      // Incrementar contador de falhas de login
-      const updatedUser = await userRepository.incrementLoginAttempts(user.id);
-
-      await auditService?.log({
-        action: 'LOGIN_FAILED',
-        userId: user.id,
-        userEmail: email,
-        ipAddress,
-        details: {
-          reason: 'Senha inválida',
-          attemptsRemaining: Math.max(0, 5 - updatedUser.loginAttempts),
-          isLocked: updatedUser.isLocked()
-        }
-      });
-
-      return res.status(401).json({ message: 'Credenciais inválidas' });
-    }
-
-    // Resetar contagem de tentativas após login bem-sucedido
-    await userRepository.resetLoginAttempts(user.id);
+    // Usar o serviço de autenticação para verificar credenciais
+    // Isso centraliza a lógica de autenticação e evita duplicação
+    const user = await authService.verifyCredentials(email, password, ipAddress);
 
     // Verificar se 2FA está ativado
     if (user.twoFactorEnabled) {
-      const tempToken = tokenService.generateTempToken({ id: user.id, email: user.email });
-
-      await auditService?.log({
-        action: 'LOGIN_2FA_REQUIRED',
-        userId: user.id,
-        userEmail: email,
-        ipAddress,
-        details: { success: true }
+      const tempToken = tokenService.generateTempToken({ 
+        id: user.id, 
+        email: user.email,
+        is2FA: true
       });
+
+      this._logAuditEvent('LOGIN_2FA_REQUIRED', user, ipAddress);
 
       return res.status(206).json({
         message: '2FA necessário',
@@ -139,15 +95,11 @@ class AuthController {
     const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
 
     // Definir cookie HTTP-only para refresh token
-    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
+    this._setRefreshTokenCookie(res, refreshToken.token);
 
-    // Registrar na auditoria
-    await auditService?.log({
-      action: 'LOGIN',
-      userId: user.id,
-      userEmail: user.email,
-      ipAddress,
-      details: { user2FA: user.twoFactorEnabled }
+    // Registrar evento de login bem-sucedido
+    this._logAuditEvent('LOGIN', user, ipAddress, { 
+      user2FA: user.twoFactorEnabled 
     });
 
     res.status(200).json({
@@ -158,6 +110,8 @@ class AuthController {
 
   /**
    * Verifica o token 2FA e completa o login
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async verify2FA(req, res) {
     const { token, tempToken } = req.body;
@@ -168,7 +122,7 @@ class AuthController {
     const result = await verify2FAUseCase.execute(token, tempToken, ipAddress);
 
     // Definir cookie HTTP-only para refresh token
-    res.cookie('refreshToken', result.refreshToken, securityConfig.cookieOptions.refreshToken);
+    this._setRefreshTokenCookie(res, result.refreshToken);
 
     // Retornar apenas o token de acesso e usuário (não o refresh token)
     res.status(200).json({
@@ -179,6 +133,8 @@ class AuthController {
 
   /**
    * Autentica com código de recuperação 2FA
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async verify2FARecovery(req, res) {
     const { code, tempToken } = req.body;
@@ -188,27 +144,25 @@ class AuthController {
     const decoded = tokenService.verifyAccessToken(tempToken);
 
     if (!decoded || !decoded.is2FA) {
-      return res.status(400).json({ message: 'Token temporário inválido' });
+      throw new BadRequestError('Token temporário inválido para fluxo 2FA');
     }
 
-    const user = await userRepository.findById(decoded.id);
+    // Buscar usuário
+    const user = await authService.verifyUser(decoded.id, {
+      requireVerified: true,
+      requireActive: true
+    });
 
-    if (!user || !user.twoFactorEnabled) {
-      return res.status(400).json({ message: '2FA não está habilitado para este usuário' });
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestError('2FA não está habilitado para este usuário');
     }
 
     // Verificar o código de recuperação
-    const recoveryCodeValid = user.validateRecoveryCode(code);
+    const recoveryCodeValid = await user.validateRecoveryCode(code);
 
     if (!recoveryCodeValid) {
-      await auditService?.log({
-        action: 'LOGIN_2FA_RECOVERY_FAILED',
-        userId: user.id,
-        userEmail: user.email,
-        ipAddress
-      });
-
-      return res.status(401).json({ message: 'Código de recuperação inválido' });
+      this._logAuditEvent('LOGIN_2FA_RECOVERY_FAILED', user, ipAddress);
+      throw new UnauthorizedError('Código de recuperação inválido');
     }
 
     // Salvar mudanças (marcar código como usado)
@@ -224,15 +178,10 @@ class AuthController {
     const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
 
     // Definir cookie HTTP-only para refresh token
-    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
+    this._setRefreshTokenCookie(res, refreshToken.token);
 
     // Registrar na auditoria
-    await auditService?.log({
-      action: 'LOGIN_2FA_RECOVERY_SUCCESS',
-      userId: user.id,
-      userEmail: user.email,
-      ipAddress
-    });
+    this._logAuditEvent('LOGIN_2FA_RECOVERY_SUCCESS', user, ipAddress);
 
     res.status(200).json({
       accessToken,
@@ -243,82 +192,49 @@ class AuthController {
 
   /**
    * Configura a autenticação de dois fatores para um usuário
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async setup2FA(req, res) {
     const userId = req.user.id;
+    const ipAddress = req.ip;
 
-    // Buscar usuário
-    const user = await userRepository.findById(userId);
-
-    // Gerar segredo para 2FA
-    const secret = twoFactorService.generateSecret(user.email);
-
-    // Atualizar usuário com segredo 2FA
-    user.enable2FA(secret.base32);
-    await userRepository.save(user);
-
-    // Gerar QR Code para configuração
-    const qrCode = await twoFactorService.generateQRCode(secret.otpauth_url);
-
-    // Gerar códigos de recuperação
-    const recoveryCodes = twoFactorService.generateRecoveryCodes();
-
-    // Salvar códigos de recuperação
-    user.setRecoveryCodes(recoveryCodes);
-    await userRepository.save(user);
-
-    // Enviar códigos por email como backup
-    await mailService.sendRecoveryCodes(user.email, recoveryCodes);
-
-    // Registrar na auditoria
-    await auditService?.log({
-      action: '2FA_SETUP',
-      userId: user.id,
-      userEmail: user.email,
-      ipAddress: req.ip
-    });
+    // Usar caso de uso para configuração 2FA
+    const setup2FAUseCase = AuthUseCaseFactory.createSetup2FAUseCase();
+    const result = await setup2FAUseCase.execute(userId, ipAddress);
 
     res.status(200).json({
-      qrCode,
-      recoveryCodes,
-      secret: config.app.env === 'development' ? secret.base32 : undefined // Enviar apenas em ambiente de desenvolvimento
+      qrCode: result.qrCode,
+      recoveryCodes: result.recoveryCodes,
+      // Em desenvolvimento, podemos retornar o segredo para facilitar os testes
+      secret: config.app.env === 'development' ? result.secret : undefined
     });
   }
 
   /**
    * Desativa a autenticação de dois fatores
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async disable2FA(req, res) {
     const userId = req.user.id;
     const { token } = req.body;
+    const ipAddress = req.ip;
 
-    // Buscar usuário
-    const user = await userRepository.findById(userId);
+    // Usar caso de uso para desativar 2FA
+    const disable2FAUseCase = AuthUseCaseFactory.createDisable2FAUseCase();
+    const result = await disable2FAUseCase.execute(userId, token, ipAddress);
 
-    // Verificar token antes de desativar
-    const verified = twoFactorService.verifyToken(user.twoFactorSecret, token);
-
-    if (!verified) {
-      return res.status(401).json({ message: 'Código 2FA inválido' });
-    }
-
-    // Desativar 2FA
-    user.disable2FA();
-    await userRepository.save(user);
-
-    // Registrar na auditoria
-    await auditService?.log({
-      action: '2FA_DISABLED',
-      userId: user.id,
-      userEmail: user.email,
-      ipAddress: req.ip
+    res.status(200).json({ 
+      message: result.message || '2FA desativado com sucesso',
+      success: result.success
     });
-
-    res.status(200).json({ message: '2FA desativado com sucesso' });
   }
 
   /**
    * Realiza logout invalidando tokens
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async logout(req, res) {
     const token = req.headers.authorization?.split(' ')[1];
@@ -327,114 +243,90 @@ class AuthController {
 
     // Usar caso de uso para logout
     const logoutUseCase = AuthUseCaseFactory.createLogoutUseCase();
-    await logoutUseCase.execute(token, refreshToken, req.user, ipAddress);
+    const result = await logoutUseCase.execute(token, refreshToken, req.user, ipAddress);
 
     // Limpar cookie
-    const cookieOptions = { ...securityConfig.cookieOptions.refreshToken, maxAge: 0 };
-    res.clearCookie('refreshToken', cookieOptions);
+    this._clearRefreshTokenCookie(res);
 
-    res.status(200).json({ message: 'Logout realizado com sucesso' });
+    res.status(200).json({ 
+      message: result.message || 'Logout realizado com sucesso'
+    });
   }
 
   /**
    * Atualiza tokens usando refresh token
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async refreshToken(req, res) {
     const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
     const ipAddress = req.ip;
+
+    if (!refreshToken) {
+      throw new BadRequestError('Refresh token não fornecido');
+    }
 
     // Usar caso de uso para refresh de tokens
     const refreshTokensUseCase = AuthUseCaseFactory.createRefreshTokensUseCase();
     const result = await refreshTokensUseCase.execute(refreshToken, ipAddress);
 
     // Atualizar cookie
-    res.cookie('refreshToken', result.refreshToken, securityConfig.cookieOptions.refreshToken);
+    this._setRefreshTokenCookie(res, result.refreshToken);
 
     res.status(200).json({ accessToken: result.accessToken });
   }
 
   /**
    * Solicita redefinição de senha
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async requestPasswordReset(req, res) {
     const { email } = req.body;
+    const ipAddress = req.ip;
 
-    // Buscar usuário
-    const user = await userRepository.findByEmail(email);
-
-    // Se o usuário não existe, fingir que tudo correu bem
-    // para não revelar se o email está cadastrado
-    if (!user) {
-      return res.status(200).json({
-        message: 'Instruções de redefinição enviadas para o e-mail, se estiver cadastrado'
-      });
-    }
-
-    // Gerar token de redefinição
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpires = new Date(Date.now() + config.auth.password.resetTokenExpiry);
-
-    // Salvar token no usuário
-    user.resetToken = resetToken;
-    user.resetTokenExpires = resetTokenExpires;
-    await userRepository.save(user);
-
-    // Enviar e-mail com token
-    await mailService.sendResetPasswordEmail(email, resetToken);
-
-    // Registrar na auditoria
-    await auditService?.log({
-      action: 'PASSWORD_RESET_REQUEST',
-      userId: user.id,
-      userEmail: email,
-      ipAddress: req.ip
-    });
+    // Usar caso de uso para solicitar redefinição de senha
+    const requestResetUseCase = AuthUseCaseFactory.createRequestPasswordResetUseCase();
+    const result = await requestResetUseCase.execute(email, ipAddress);
 
     res.status(200).json({
-      message: 'Instruções de redefinição enviadas para o e-mail, se estiver cadastrado'
+      message: result.message || 'Instruções de redefinição enviadas para o e-mail, se estiver cadastrado'
     });
   }
 
   /**
    * Redefine a senha usando token
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async resetPassword(req, res) {
     const { token, newPassword } = req.body;
+    const ipAddress = req.ip;
 
-    // Buscar usuário com token válido
-    const user = await userRepository.findByResetToken(token);
-
-    if (!user) {
-      return res.status(400).json({ message: 'Token inválido ou expirado' });
+    if (!token || !newPassword) {
+      throw new BadRequestError('Token e nova senha são obrigatórios');
     }
 
-    // Atualizar senha
-    user.password = newPassword; // o hash será feito no repositório
-    user.resetToken = null;
-    user.resetTokenExpires = null;
+    // Usar caso de uso para redefinir senha
+    const resetPasswordUseCase = AuthUseCaseFactory.createResetPasswordUseCase();
+    const result = await resetPasswordUseCase.execute(token, newPassword, ipAddress);
 
-    await userRepository.save(user);
-
-    // Registrar na auditoria
-    await auditService?.log({
-      action: 'PASSWORD_RESET_COMPLETE',
-      userId: user.id,
-      userEmail: user.email,
-      ipAddress: req.ip
+    res.status(200).json({ 
+      message: result.message || 'Senha redefinida com sucesso' 
     });
-
-    res.status(200).json({ message: 'Senha redefinida com sucesso' });
   }
 
   /**
    * Processa o callback da autenticação Google
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
    */
   async googleCallback(req, res) {
     const ipAddress = req.ip;
     const user = req.user;
 
     if (!user) {
-      return res.status(401).json({ message: 'Falha na autenticação com Google' });
+      throw new UnauthorizedError('Falha na autenticação com Google');
     }
 
     // Gerar tokens
@@ -446,21 +338,100 @@ class AuthController {
 
     const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
 
-    // Definir cookie HTTP-only para refresh token
-    res.cookie('refreshToken', refreshToken.token, securityConfig.cookieOptions.refreshToken);
+    // Definir cookie HTTP-only para refresh token (será enviado nas próximas requisições)
+    this._setRefreshTokenCookie(res, refreshToken.token);
 
     // Registrar na auditoria
-    await auditService?.log({
-      action: 'LOGIN_GOOGLE',
-      userId: user.id,
-      userEmail: user.email,
-      ipAddress
-    });
+    this._logAuditEvent('LOGIN_GOOGLE', user, ipAddress);
 
     // Redirecionar para frontend com token
     const redirectUrl = `${config.oauth.google.redirectUrl}/login/oauth/success?token=${accessToken}`;
     res.redirect(redirectUrl);
   }
+
+  /**
+   * Valida o token atual (endpoint leve)
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
+   */
+  async validateToken(req, res) {
+    // O middleware de autenticação já verificou o token, 
+    // então se chegamos aqui, o token é válido
+    res.status(200).json({
+      valid: true,
+      userId: req.user.id,
+      email: req.user.email,
+      role: req.user.role
+    });
+  }
+
+  /**
+   * Busca informações resumidas do usuário atual
+   * @param {Request} req Express Request
+   * @param {Response} res Express Response
+   */
+  async getCurrentUser(req, res) {
+    // req.user já contém informações básicas, mas vamos buscar dados completos
+    const user = await userRepository.findById(req.user.id);
+    
+    if (!user) {
+      throw new BadRequestError('Usuário não encontrado');
+    }
+    
+    res.status(200).json(user.toSafeObject());
+  }
+
+  /**
+   * Define um cookie HTTP-only para o refresh token
+   * @private
+   * @param {Response} res Express Response
+   * @param {string} token Refresh token
+   */
+  _setRefreshTokenCookie(res, token) {
+    if (!token) return;
+    
+    res.cookie(
+      'refreshToken', 
+      token, 
+      securityConfig.cookieOptions.refreshToken
+    );
+  }
+
+  /**
+   * Limpa o cookie de refresh token
+   * @private
+   * @param {Response} res Express Response
+   */
+  _clearRefreshTokenCookie(res) {
+    const cookieOptions = { 
+      ...securityConfig.cookieOptions.refreshToken, 
+      maxAge: 0 
+    };
+    res.clearCookie('refreshToken', cookieOptions);
+  }
+
+  /**
+   * Registra um evento de auditoria
+   * @private
+   * @param {string} action Ação a ser registrada
+   * @param {Object} user Usuário relacionado
+   * @param {string} ipAddress Endereço IP
+   * @param {Object} details Detalhes adicionais
+   */
+  async _logAuditEvent(action, user, ipAddress, details = {}) {
+    if (auditService) {
+      await auditService.log({
+        action,
+        userId: user.id,
+        userEmail: user.email,
+        ipAddress,
+        details
+      });
+    }
+    
+    logger.info(`Auth: ${action} - ${user.email} (${ipAddress})`);
+  }
 }
 
+// Exportar uma única instância do controlador
 module.exports = new AuthController();
