@@ -7,7 +7,7 @@ const { UnauthorizedError, BadRequestError } = require('../../shared/errors/api-
 
 /**
  * Serviço para gerenciamento de tokens JWT e refresh tokens
- * Centraliza a lógica de tokens para evitar duplicações
+ * Centraliza toda a lógica de tokens para evitar duplicações
  */
 class TokenService {
   constructor(authRepository) {
@@ -17,22 +17,28 @@ class TokenService {
   /**
    * Gera um token JWT de acesso
    * @param {Object} payload Dados a serem codificados no token
+   * @param {Object} options Opções adicionais para geração do token
    * @returns {string} Token JWT assinado
    */
-  generateAccessToken(payload) {
+  generateAccessToken(payload, options = {}) {
+    const { expiresIn = config.auth.jwt.expiresIn } = options;
+    
     return jwt.sign(payload, config.auth.jwt.secret, {
-      expiresIn: config.auth.jwt.expiresIn
+      expiresIn
     });
   }
 
   /**
    * Gera um token JWT temporário (para 2FA)
    * @param {Object} payload Dados a serem codificados no token
+   * @param {Object} options Opções adicionais para geração do token
    * @returns {string} Token JWT temporário
    */
-  generateTempToken(payload) {
+  generateTempToken(payload, options = {}) {
+    const { expiresIn = '5m' } = options;
+    
     return jwt.sign({ ...payload, is2FA: true }, config.auth.jwt.secret, {
-      expiresIn: '5m' // Token temporário válido por 5 minutos
+      expiresIn
     });
   }
 
@@ -60,18 +66,66 @@ class TokenService {
   }
 
   /**
-   * Verifica e decodifica um token JWT
+   * Verifica e decodifica um token JWT com validações completas
+   * Método centralizado que combina várias verificações
+   * 
    * @param {string} token Token JWT a ser verificado
-   * @returns {Object} Payload decodificado
+   * @param {Object} options Opções adicionais para verificação
+   * @returns {Promise<Object>} Payload decodificado
+   * @throws {UnauthorizedError} Se o token for inválido, expirado ou estiver na blacklist
    */
-  verifyAccessToken(token) {
+  async verifyAndDecodeToken(token, options = {}) {
+    const { 
+      requireRegularToken = false, 
+      require2FAToken = false,
+      checkBlacklist = true
+    } = options;
+
+    // Verificar se o token foi fornecido
+    if (!token) {
+      throw new UnauthorizedError('Token não fornecido');
+    }
+
     try {
-      return jwt.verify(token, config.auth.jwt.secret);
-    } catch (error) {
-      if (error.name === 'TokenExpiredError') {
-        throw new UnauthorizedError('Token expirado');
+      // Verificar se o token está na blacklist (se solicitado)
+      if (checkBlacklist) {
+        const isBlacklisted = await this.isTokenBlacklisted(token);
+        if (isBlacklisted) {
+          throw new UnauthorizedError('Token revogado ou expirado');
+        }
       }
-      throw new UnauthorizedError('Token inválido');
+
+      // Verificar e decodificar o token
+      const decoded = jwt.verify(token, config.auth.jwt.secret);
+
+      // Verificar se há informações mínimas necessárias no token
+      if (!decoded || !decoded.id) {
+        throw new UnauthorizedError('Token inválido ou malformado');
+      }
+
+      // Se for um token especial para 2FA, verificar flag
+      if (requireRegularToken && decoded.is2FA) {
+        throw new UnauthorizedError('Token de autenticação 2FA usado em contexto inválido');
+      }
+
+      // Se for um token temporário, verificar flag
+      if (require2FAToken && !decoded.is2FA) {
+        throw new UnauthorizedError('Token de acesso usado em contexto 2FA');
+      }
+
+      return decoded;
+    } catch (error) {
+      // Capturar erros específicos de autenticação
+      if (error instanceof UnauthorizedError) {
+        throw error;
+      } else if (error.name === 'TokenExpiredError') {
+        throw new UnauthorizedError('Token expirado');
+      } else if (error.name === 'JsonWebTokenError') {
+        throw new UnauthorizedError('Token inválido');
+      } else {
+        logger.error(`Erro na verificação do token: ${error.message}`);
+        throw new UnauthorizedError('Falha na autenticação');
+      }
     }
   }
 
@@ -170,6 +224,45 @@ class TokenService {
       return jwt.decode(token);
     } catch (error) {
       throw new BadRequestError('Formato de token inválido');
+    }
+  }
+
+  /**
+   * Obtém o tempo restante de um token JWT em segundos
+   * @param {string} token Token JWT
+   * @returns {number} Tempo em segundos até a expiração do token, 0 se expirado
+   */
+  getRemainingTokenTime(token) {
+    try {
+      const decoded = this.decodeToken(token);
+      if (decoded && decoded.exp) {
+        const now = Math.floor(Date.now() / 1000);
+        return Math.max(0, decoded.exp - now);
+      }
+      return 0;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  /**
+   * Extrai o ID e email do usuário de um token JWT
+   * @param {string} token Token JWT
+   * @returns {Object|null} Objeto com id e email do usuário, ou null se inválido
+   */
+  extractUserFromToken(token) {
+    try {
+      const decoded = this.decodeToken(token);
+      if (decoded && decoded.id && decoded.email) {
+        return {
+          id: decoded.id,
+          email: decoded.email,
+          role: decoded.role || 'user'
+        };
+      }
+      return null;
+    } catch (error) {
+      return null;
     }
   }
 

@@ -3,6 +3,7 @@ const AuthUseCaseFactory = require('../../../domain/auth/factories/auth-use-case
 const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
 const authService = require('../../../infrastructure/security/auth.service');
 const tokenService = require('../../../infrastructure/security/token.service');
+const twoFactorService = require('../../../infrastructure/security/two-factor.service');
 const config = require('../../../infrastructure/config');
 const securityConfig = require('../../../infrastructure/security/security.config');
 const logger = require('../../../infrastructure/logging/logger');
@@ -71,8 +72,7 @@ class AuthController {
     if (user.twoFactorEnabled) {
       const tempToken = tokenService.generateTempToken({ 
         id: user.id, 
-        email: user.email,
-        is2FA: true
+        email: user.email
       });
 
       // Registrar evento de autenticação 2FA necessária
@@ -117,7 +117,9 @@ class AuthController {
     const ipAddress = req.ip;
 
     // Verificar token temporário usando o serviço centralizado
-    const decoded = await authService.verifyToken(tempToken, { require2FAToken: true });
+    const decoded = await tokenService.verifyAndDecodeToken(tempToken, { 
+      require2FAToken: true 
+    });
 
     // Buscar usuário
     const user = await authService.verifyUser(decoded.id, {
@@ -129,20 +131,34 @@ class AuthController {
       throw new BadRequestError('2FA não está habilitado para este usuário');
     }
 
-    // Usar caso de uso para verificação 2FA
-    const verify2FAUseCase = AuthUseCaseFactory.createVerify2FAUseCase();
-    const result = await verify2FAUseCase.execute(token, tempToken, ipAddress);
+    // Verificar o token TOTP
+    const verified = twoFactorService.verifyToken(user.twoFactorSecret, token);
+
+    if (!verified) {
+      // Registrar falha na auditoria
+      await authService.logAuthEvent('LOGIN_2FA_FAILED', user, ipAddress);
+      
+      throw new UnauthorizedError('Código 2FA inválido');
+    }
+
+    // Gerar tokens para usuário autenticado com 2FA
+    const accessToken = tokenService.generateAccessToken({
+      id: user.id,
+      email: user.email,
+      role: user.role
+    });
+
+    const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
 
     // Definir cookie HTTP-only para refresh token
-    this._setRefreshTokenCookie(res, result.refreshToken);
+    this._setRefreshTokenCookie(res, refreshToken.token);
 
     // Registrar evento de autenticação 2FA completada
     await authService.logAuthEvent('LOGIN_2FA_SUCCESS', user, ipAddress);
 
-    // Retornar apenas o token de acesso e usuário (não o refresh token)
     res.status(200).json({
-      accessToken: result.accessToken,
-      user: result.user
+      accessToken,
+      user: user.toSafeObject()
     });
   }
 
@@ -156,7 +172,9 @@ class AuthController {
     const ipAddress = req.ip;
 
     // Verificar token temporário usando o serviço centralizado
-    const decoded = await authService.verifyToken(tempToken, { require2FAToken: true });
+    const decoded = await tokenService.verifyAndDecodeToken(tempToken, { 
+      require2FAToken: true 
+    });
 
     // Buscar usuário
     const user = await authService.verifyUser(decoded.id, {
@@ -261,21 +279,37 @@ class AuthController {
    */
   async logout(req, res) {
     const token = req.headers.authorization?.split(' ')[1];
-    const refreshToken = req.cookies.refreshToken;
+    const refreshToken = req.cookies?.refreshToken;
     const ipAddress = req.ip;
 
-    // Usar caso de uso para logout
-    const logoutUseCase = AuthUseCaseFactory.createLogoutUseCase();
-    const result = await logoutUseCase.execute(token, refreshToken, req.user, ipAddress);
+    // Tratar token de acesso se fornecido
+    if (token) {
+      // Obter tempo restante para o token
+      const remainingTime = tokenService.getRemainingTokenTime(token);
+      
+      // Adicionar à blacklist pelo tempo restante de validade ou por 1 hora mínimo
+      await tokenService.blacklistToken(
+        token,
+        'access',
+        remainingTime > 0 ? remainingTime : 3600 // Mínimo de 1 hora
+      );
+    }
+
+    // Revogar refresh token se fornecido
+    if (refreshToken) {
+      await tokenService.revokeRefreshToken(refreshToken, ipAddress);
+    }
 
     // Registrar evento de logout
-    await authService.logAuthEvent('LOGOUT', req.user, ipAddress);
+    if (req.user) {
+      await authService.logAuthEvent('LOGOUT', req.user, ipAddress);
+    }
 
     // Limpar cookie
     this._clearRefreshTokenCookie(res);
 
     res.status(200).json({ 
-      message: result.message || 'Logout realizado com sucesso'
+      message: 'Logout realizado com sucesso'
     });
   }
 
@@ -285,21 +319,27 @@ class AuthController {
    * @param {Response} res Express Response
    */
   async refreshToken(req, res) {
-    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
     const ipAddress = req.ip;
 
     if (!refreshToken) {
       throw new BadRequestError('Refresh token não fornecido');
     }
 
-    // Usar caso de uso para refresh de tokens
-    const refreshTokensUseCase = AuthUseCaseFactory.createRefreshTokensUseCase();
-    const result = await refreshTokensUseCase.execute(refreshToken, ipAddress);
+    // Usar o serviço centralizado para refresh de tokens
+    const tokens = await tokenService.refreshTokens(refreshToken, ipAddress);
 
     // Atualizar cookie
-    this._setRefreshTokenCookie(res, result.refreshToken);
+    this._setRefreshTokenCookie(res, tokens.refreshToken);
 
-    res.status(200).json({ accessToken: result.accessToken });
+    // Obter usuário do token para registro de auditoria
+    const userInfo = tokenService.extractUserFromToken(tokens.accessToken);
+    
+    if (userInfo) {
+      await authService.logAuthEvent('TOKEN_REFRESH', userInfo, ipAddress);
+    }
+
+    res.status(200).json({ accessToken: tokens.accessToken });
   }
 
   /**
@@ -358,7 +398,7 @@ class AuthController {
       throw new UnauthorizedError('Falha na autenticação com Google');
     }
 
-    // Gerar tokens
+    // Gerar tokens usando o serviço centralizado
     const accessToken = tokenService.generateAccessToken({
       id: user.id,
       email: user.email,
@@ -367,7 +407,7 @@ class AuthController {
 
     const refreshToken = await tokenService.generateRefreshToken(user, ipAddress);
 
-    // Definir cookie HTTP-only para refresh token (será enviado nas próximas requisições)
+    // Definir cookie HTTP-only para refresh token
     this._setRefreshTokenCookie(res, refreshToken.token);
 
     // Registrar evento de login via Google

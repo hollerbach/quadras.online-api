@@ -22,56 +22,16 @@ class AuthService {
 
   /**
    * Verifica a autenticação a partir de um token JWT
+   * Utiliza o tokenService centralizado para verificação
    * 
    * @param {string} token Token JWT a ser verificado
    * @param {Object} options Opções adicionais
-   * @returns {Object} Payload decodificado
+   * @returns {Promise<Object>} Payload decodificado
    * @throws {UnauthorizedError} Se o token for inválido ou estiver na blacklist
    */
   async verifyToken(token, options = {}) {
-    if (!token) {
-      throw new UnauthorizedError('Token não fornecido');
-    }
-
-    try {
-      // Verificar se o token está na blacklist
-      const isBlacklisted = await tokenService.isTokenBlacklisted(token);
-      if (isBlacklisted) {
-        throw new UnauthorizedError('Token revogado ou expirado');
-      }
-
-      // Verificar e decodificar o token
-      const decoded = tokenService.verifyAccessToken(token);
-
-      // Verificar se há informações mínimas necessárias no token
-      if (!decoded || !decoded.id || !decoded.email) {
-        throw new UnauthorizedError('Token inválido ou malformado');
-      }
-
-      // Se for um token especial para 2FA, verificar flag
-      if (options.requireRegularToken && decoded.is2FA) {
-        throw new UnauthorizedError('Token de autenticação 2FA usado em contexto inválido');
-      }
-
-      // Se for um token temporário, verificar flag
-      if (options.require2FAToken && !decoded.is2FA) {
-        throw new UnauthorizedError('Token de acesso usado em contexto 2FA');
-      }
-
-      return decoded;
-    } catch (error) {
-      // Capturar erros específicos de autenticação
-      if (error.name === 'TokenExpiredError') {
-        throw new UnauthorizedError('Token expirado');
-      } else if (error.name === 'JsonWebTokenError') {
-        throw new UnauthorizedError('Token inválido');
-      } else if (error instanceof UnauthorizedError) {
-        throw error;
-      } else {
-        logger.error(`Erro na verificação do token: ${error.message}`);
-        throw new UnauthorizedError('Falha na autenticação');
-      }
-    }
+    // Usa o tokenService centralizado para verificar o token
+    return await tokenService.verifyAndDecodeToken(token, options);
   }
 
   /**

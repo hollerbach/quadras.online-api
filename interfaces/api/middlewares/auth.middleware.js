@@ -29,7 +29,9 @@ class AuthMiddleware {
       }
       
       // Usar serviço centralizado para verificar o token
-      const decoded = await authService.verifyToken(token, { requireRegularToken: true });
+      const decoded = await authService.verifyToken(token, { 
+        requireRegularToken: true 
+      });
       
       // Armazenar informações básicas do usuário no objeto req
       req.user = {
@@ -139,7 +141,7 @@ class AuthMiddleware {
     }
     
     try {
-      // Validar o refresh token através do serviço
+      // Validar o refresh token através do serviço centralizado
       const tokenInfo = await tokenService.validateRefreshToken(refreshToken);
       
       if (!tokenInfo) {
@@ -208,14 +210,17 @@ class AuthMiddleware {
       // Verificar se tem qualquer permissão
       hasAnyPermission: async (permissionCodes, resourcePath = null, options = {}) => {
         return await authService.hasAnyPermission(req.user.id, permissionCodes, resourcePath, options);
-      }
+      },
+      
+      // Extrair o usuário atual
+      getCurrentUser: () => req.user
     };
     
     next();
   });
 
   /**
-   * Extrair token de autorização da requisição
+   * Extrai token de autorização da requisição
    * @private
    * @param {Request} req Objeto de requisição Express
    * @returns {string|null} Token extraído ou null
