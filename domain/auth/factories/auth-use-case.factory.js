@@ -14,11 +14,11 @@ const LoginUseCase = require('../use-cases/login.use-case');
 const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
 const authRepository = require('../../../infrastructure/database/mongodb/repositories/auth.repository');
 
-// Serviços
+// Serviços centralizados
+const authService = require('../../../infrastructure/security/auth.service');
 const mailService = require('../../../infrastructure/external/mail.service');
 const tokenService = require('../../../infrastructure/security/token.service');
 const twoFactorService = require('../../../infrastructure/security/two-factor.service');
-const authService = require('../../../infrastructure/security/auth.service');
 
 // Auditoria (opcional)
 let auditService;
@@ -31,6 +31,7 @@ try {
 /**
  * Factory para criação de casos de uso de autenticação
  * Facilita a injeção de dependências e mocking para testes
+ * Centraliza a configuração dos casos de uso
  */
 class AuthUseCaseFactory {
   /**
@@ -172,57 +173,25 @@ class AuthUseCaseFactory {
   }
 
   /**
-   * Recupera o serviço de autenticação
+   * Método utilitário para obter serviços e repositórios
+   * Útil para testes e para usos especiais
+   * 
+   * @param {string} name Nome do serviço/repositório desejado
    * @param {Object} customDeps Dependências personalizadas (para testes)
-   * @returns {Object} Serviço de autenticação
+   * @returns {Object} Instância do serviço/repositório
    */
-  static getAuthService(customDeps = {}) {
-    return customDeps.authService || authService;
-  }
+  static getDependency(name, customDeps = {}) {
+    const dependencyMap = {
+      authService: customDeps.authService || authService,
+      tokenService: customDeps.tokenService || tokenService,
+      twoFactorService: customDeps.twoFactorService || twoFactorService,
+      userRepository: customDeps.userRepository || userRepository,
+      authRepository: customDeps.authRepository || authRepository,
+      auditService: customDeps.auditService || auditService,
+      mailService: customDeps.mailService || mailService
+    };
 
-  /**
-   * Recupera o serviço de token
-   * @param {Object} customDeps Dependências personalizadas (para testes)
-   * @returns {Object} Serviço de token
-   */
-  static getTokenService(customDeps = {}) {
-    return customDeps.tokenService || tokenService;
-  }
-
-  /**
-   * Recupera o serviço de 2FA
-   * @param {Object} customDeps Dependências personalizadas (para testes)
-   * @returns {Object} Serviço de 2FA
-   */
-  static getTwoFactorService(customDeps = {}) {
-    return customDeps.twoFactorService || twoFactorService;
-  }
-
-  /**
-   * Recupera o repositório de usuário
-   * @param {Object} customDeps Dependências personalizadas (para testes)
-   * @returns {Object} Repositório de usuário
-   */
-  static getUserRepository(customDeps = {}) {
-    return customDeps.userRepository || userRepository;
-  }
-
-  /**
-   * Recupera o repositório de autenticação
-   * @param {Object} customDeps Dependências personalizadas (para testes)
-   * @returns {Object} Repositório de autenticação
-   */
-  static getAuthRepository(customDeps = {}) {
-    return customDeps.authRepository || authRepository;
-  }
-
-  /**
-   * Recupera o serviço de auditoria
-   * @param {Object} customDeps Dependências personalizadas (para testes)
-   * @returns {Object} Serviço de auditoria
-   */
-  static getAuditService(customDeps = {}) {
-    return customDeps.auditService || auditService;
+    return dependencyMap[name] || null;
   }
 }
 

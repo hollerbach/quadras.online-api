@@ -1,20 +1,23 @@
 // src/domain/auth/use-cases/disable-2fa.use-case.js
-const logger = require('../../../infrastructure/logging/logger');
+const BaseAuthUseCase = require('./base-auth-use-case');
 const { NotFoundError, UnauthorizedError } = require('../../../shared/errors/api-error');
 
 /**
  * Caso de uso para desativar a autenticação de dois fatores
+ * Usa a classe base para reduzir duplicação
  */
-class Disable2FAUseCase {
+class Disable2FAUseCase extends BaseAuthUseCase {
   /**
    * @param {Object} userRepository Repositório de usuários
    * @param {Object} twoFactorService Serviço de autenticação 2FA
+   * @param {Object} authService Serviço de autenticação
    * @param {Object} auditService Serviço de auditoria (opcional)
    */
-  constructor(userRepository, twoFactorService, auditService = null) {
-    this.userRepository = userRepository;
-    this.twoFactorService = twoFactorService;
-    this.auditService = auditService;
+  constructor(userRepository, twoFactorService, authService, auditService = null) {
+    super(
+      { userRepository },
+      { twoFactorService, authService, auditService }
+    );
   }
 
   /**
@@ -25,13 +28,9 @@ class Disable2FAUseCase {
    * @returns {Promise<Object>} Resultado da operação
    */
   async execute(userId, token, ipAddress) {
-    // Buscar usuário
-    const user = await this.userRepository.findById(userId);
+    // Buscar usuário usando o método da classe base
+    const user = await this._verifyUserExists(userId);
     
-    if (!user) {
-      throw new NotFoundError('Usuário não encontrado');
-    }
-
     if (!user.twoFactorEnabled) {
       return {
         success: false,
@@ -40,39 +39,24 @@ class Disable2FAUseCase {
     }
 
     // Verificar token antes de desativar
-    const verified = this.twoFactorService.verifyToken(user.twoFactorSecret, token);
+    const verified = this.services.twoFactorService.verifyToken(user.twoFactorSecret, token);
 
     if (!verified) {
       // Registrar tentativa inválida
-      if (this.auditService) {
-        await this.auditService.log({
-          action: '2FA_DISABLE_FAILED',
-          userId: user.id,
-          userEmail: user.email,
-          ipAddress,
-          details: { reason: 'Token inválido' }
-        });
-      }
+      await this._logSecurityEvent('2FA_DISABLE_FAILED', user, ipAddress, { 
+        reason: 'Token inválido',
+        success: false
+      });
       
       throw new UnauthorizedError('Código 2FA inválido');
     }
 
     // Desativar 2FA
     user.disable2FA();
-    await this.userRepository.save(user);
+    await this.repositories.userRepository.save(user);
 
-    // Registrar na auditoria, se disponível
-    if (this.auditService) {
-      await this.auditService.log({
-        action: '2FA_DISABLED',
-        userId: user.id,
-        userEmail: user.email,
-        ipAddress,
-        details: { success: true }
-      });
-    }
-
-    logger.info(`2FA desativado com sucesso para usuário: ${user.email}`);
+    // Registrar evento de desativação 2FA
+    await this._logSecurityEvent('2FA_DISABLED', user, ipAddress, { success: true });
     
     return {
       success: true,

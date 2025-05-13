@@ -1,20 +1,20 @@
 // src/interfaces/api/middlewares/auth.middleware.js
-const passport = require('passport');
 const authService = require('../../../infrastructure/security/auth.service');
 const tokenService = require('../../../infrastructure/security/token.service');
 const { UnauthorizedError, ForbiddenError } = require('../../../shared/errors/api-error');
 const { asyncHandler } = require('./error.middleware');
 const logger = require('../../../infrastructure/logging/logger');
-const permissionCache = require('../../../cache/permission-cache');
 
 /**
  * Middleware para gestão de autenticação e autorização
  * Centraliza a lógica de verificação de tokens e estado do usuário
+ * Utiliza o serviço centralizado de autenticação
  */
 class AuthMiddleware {
   /**
    * Middleware para autenticação usando JWT
-   * Verifica o token, sua validade e blacklist
+   * Verifica o token e popula req.user se for válido
+   * 
    * @param {Request} req Objeto de requisição Express
    * @param {Response} res Objeto de resposta Express
    * @param {Function} next Próxima função middleware
@@ -28,19 +28,8 @@ class AuthMiddleware {
         throw new UnauthorizedError('Token de acesso não fornecido');
       }
       
-      // Verificar se o token está na blacklist
-      const isBlacklisted = await tokenService.isTokenBlacklisted(token);
-      if (isBlacklisted) {
-        throw new UnauthorizedError('Token revogado ou expirado');
-      }
-      
-      // Verificar e decodificar o token
-      const decoded = tokenService.verifyAccessToken(token);
-      
-      // Verificar se há informações mínimas necessárias no token
-      if (!decoded || !decoded.id || !decoded.email) {
-        throw new UnauthorizedError('Token inválido ou malformado');
-      }
+      // Usar serviço centralizado para verificar o token
+      const decoded = await authService.verifyToken(token, { requireRegularToken: true });
       
       // Armazenar informações básicas do usuário no objeto req
       req.user = {
@@ -51,23 +40,15 @@ class AuthMiddleware {
       
       next();
     } catch (error) {
-      // Capturar erros específicos de autenticação e enviar respostas apropriadas
-      if (error.name === 'TokenExpiredError') {
-        throw new UnauthorizedError('Token expirado');
-      } else if (error.name === 'JsonWebTokenError') {
-        throw new UnauthorizedError('Token inválido');
-      } else if (error instanceof UnauthorizedError) {
-        throw error;
-      } else {
-        logger.error(`Erro de autenticação: ${error.message}`);
-        throw new UnauthorizedError('Falha na autenticação');
-      }
+      // Erros já formatados corretamente pelo authService
+      throw error;
     }
   });
 
   /**
    * Middleware para verificar o estado do usuário
    * Verifica se o usuário está ativo, verificado e não bloqueado
+   * 
    * @param {Request} req Objeto de requisição Express
    * @param {Response} res Objeto de resposta Express
    * @param {Function} next Próxima função middleware
@@ -81,7 +62,7 @@ class AuthMiddleware {
     const requireVerified = !this._isVerificationExemptRoute(req.path);
     
     try {
-      // Usar o serviço de autenticação para verificar o estado do usuário
+      // Usar serviço centralizado para verificar o estado do usuário
       await authService.verifyUser(req.user.id, {
         requireVerified,
         requireActive: true,
@@ -107,6 +88,7 @@ class AuthMiddleware {
   /**
    * Middleware para autenticação opcional
    * Não rejeita se não houver token, apenas popula req.user se tiver um token válido
+   * 
    * @param {Request} req Objeto de requisição Express
    * @param {Response} res Objeto de resposta Express
    * @param {Function} next Próxima função middleware
@@ -116,11 +98,9 @@ class AuthMiddleware {
       const token = this._extractTokenFromRequest(req);
       
       if (token) {
-        // Verificar blacklist
-        const isBlacklisted = await tokenService.isTokenBlacklisted(token);
-        if (!isBlacklisted) {
-          // Verificar e decodificar o token
-          const decoded = tokenService.verifyAccessToken(token);
+        // Tentar verificar o token, mas não falhar se inválido
+        try {
+          const decoded = await authService.verifyToken(token);
           
           if (decoded && decoded.id) {
             req.user = {
@@ -129,14 +109,16 @@ class AuthMiddleware {
               role: decoded.role || 'user'
             };
           }
+        } catch (error) {
+          // Ignorar erros em autenticação opcional
+          logger.debug(`Autenticação opcional falhou: ${error.message}`);
         }
       }
       
       // Seguir para o próximo middleware mesmo sem autenticação
       next();
     } catch (error) {
-      // Ignorar erros de autenticação, apenas não popula req.user
-      logger.debug(`Autenticação opcional falhou: ${error.message}`);
+      // Ignorar erros em autenticação opcional
       next();
     }
   });
@@ -144,6 +126,7 @@ class AuthMiddleware {
   /**
    * Middleware para verificar tokens de refresh
    * Usado em rotas de refresh token
+   * 
    * @param {Request} req Objeto de requisição Express
    * @param {Response} res Objeto de resposta Express
    * @param {Function} next Próxima função middleware
@@ -180,9 +163,6 @@ class AuthMiddleware {
   /**
    * Middleware que combina autenticação e verificação de estado do usuário
    * Útil para rotas que precisam de ambos
-   * @param {Request} req Objeto de requisição Express
-   * @param {Response} res Objeto de resposta Express
-   * @param {Function} next Próxima função middleware
    */
   authenticated = [
     this.authenticate,
@@ -192,6 +172,7 @@ class AuthMiddleware {
   /**
    * Middleware que instala funções de autorização no objeto req
    * Permite verificações de autorização dentro dos controladores
+   * 
    * @param {Request} req Objeto de requisição Express
    * @param {Response} res Objeto de resposta Express
    * @param {Function} next Próxima função middleware
@@ -205,27 +186,28 @@ class AuthMiddleware {
     // Adicionar funções de autorização ao objeto req
     req.auth = {
       // Verificar permissão RBAC
-      hasPermission: async (permissionCode, resourcePath = null) => {
-        // Gerar chave de cache
-        const cacheKey = `user:${req.user.id}:perm:${permissionCode}:${resourcePath || 'global'}`;
-        let result = permissionCache.get(cacheKey);
-        
-        if (result === undefined) {
-          result = await authService.hasPermission(req.user.id, permissionCode, resourcePath);
-          permissionCache.set(cacheKey, result, 300); // Cache por 5 minutos
-        }
-        
-        return result;
+      hasPermission: async (permissionCode, resourcePath = null, options = {}) => {
+        return await authService.hasPermission(req.user.id, permissionCode, resourcePath, options);
       },
       
       // Verificar se o usuário tem um papel específico
-      hasRole: async (roleName) => {
-        return await authService.hasRole(req.user.id, roleName);
+      hasRole: async (roleName, options = {}) => {
+        return await authService.hasRole(req.user.id, roleName, options);
       },
       
       // Verificar se o usuário é dono de um recurso
       isOwnerOf: async (resourceType, resourceId) => {
         return await authService.isResourceOwner(req.user.id, resourceType, resourceId);
+      },
+      
+      // Verificar se tem todas as permissões
+      hasAllPermissions: async (permissionCodes, resourcePath = null, options = {}) => {
+        return await authService.hasAllPermissions(req.user.id, permissionCodes, resourcePath, options);
+      },
+      
+      // Verificar se tem qualquer permissão
+      hasAnyPermission: async (permissionCodes, resourcePath = null, options = {}) => {
+        return await authService.hasAnyPermission(req.user.id, permissionCodes, resourcePath, options);
       }
     };
     

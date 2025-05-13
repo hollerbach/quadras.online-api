@@ -1,13 +1,13 @@
 // src/interfaces/api/middlewares/rbac.middleware.js
 const { ForbiddenError } = require('../../../shared/errors/api-error');
-const rbacRepository = require('../../../infrastructure/database/mongodb/repositories/rbac.repository');
-const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
+const authService = require('../../../infrastructure/security/auth.service');
 const logger = require('../../../infrastructure/logging/logger');
 const { asyncHandler } = require('./error.middleware');
 
 /**
  * Middleware para verificação de papéis e permissões
  * Centraliza toda a lógica de autorização RBAC
+ * Utiliza o serviço centralizado de autenticação
  */
 class RbacMiddleware {
   /**
@@ -25,24 +25,14 @@ class RbacMiddleware {
         return next(new ForbiddenError('Usuário não autenticado'));
       }
       
-      // Verificação de papéis clássica (sistema antigo)
-      if (roles.length && !roles.includes(req.user.role)) {
-        // Se não tiver papel direto, verificar na nova estrutura RBAC
-        let hasRole = false;
-        
-        for (const role of roles) {
-          const userRoles = await rbacRepository.getUserRoles(req.user.id);
-          hasRole = userRoles.some(r => r.role.name === role);
-          
-          if (hasRole) break;
-        }
-        
-        if (!hasRole) {
-          this._logAccessDenied(req, 'Papel não autorizado', { 
-            requiredRoles: roles 
-          });
-          return next(new ForbiddenError('Permissão negada: papel não autorizado'));
-        }
+      // Usar serviço centralizado para verificar papéis
+      const hasRole = await authService.hasRole(req.user.id, roles);
+      
+      if (!hasRole) {
+        this._logAccessDenied(req, 'Papel não autorizado', { 
+          requiredRoles: roles 
+        });
+        return next(new ForbiddenError('Permissão negada: papel não autorizado'));
       }
       
       next();
@@ -65,16 +55,12 @@ class RbacMiddleware {
 
       const userId = req.user.id;
 
-      // Verificar se é um admin (quando permitido)
-      if (allowAdmin && req.user.role === 'admin') {
-        return next();
-      }
-
-      // Verificar permissão usando o repositório RBAC centralizado
-      const hasPermission = await rbacRepository.userHasPermission(
+      // Usar serviço centralizado para verificar permissão
+      const hasPermission = await authService.hasPermission(
         userId, 
         permissionCode,
-        this._resolveResourcePath(resourcePath, req)
+        this._resolveResourcePath(resourcePath, req),
+        { allowAdmin }
       );
       
       if (hasPermission) {
@@ -106,20 +92,8 @@ class RbacMiddleware {
         return next(new ForbiddenError('Usuário não autenticado'));
       }
       
-      const userId = req.user.id;
-      
-      // Para compatibilidade com o sistema antigo
-      if (roles.includes(req.user.role)) {
-        return next();
-      }
-      
-      // Verificar papéis na nova estrutura RBAC
-      const userRoles = await rbacRepository.getUserRoles(userId);
-      
-      // Verificar se o usuário tem pelo menos um dos papéis especificados
-      const hasRequiredRole = userRoles.some(roleAssignment => 
-        roleAssignment.role && roles.includes(roleAssignment.role.name)
-      );
+      // Usar serviço centralizado para verificar papéis
+      const hasRequiredRole = await authService.hasRole(req.user.id, roles);
       
       if (hasRequiredRole) {
         return next();
@@ -127,8 +101,7 @@ class RbacMiddleware {
       
       // Registrar tentativa de acesso não autorizado
       this._logAccessDenied(req, 'Papel não autorizado', {
-        requiredRoles: roles,
-        userRoles: userRoles.map(r => r.role.name)
+        requiredRoles: roles
       });
       
       return next(new ForbiddenError('Permissão negada: papel não autorizado'));
@@ -148,8 +121,6 @@ class RbacMiddleware {
         return next(new ForbiddenError('Usuário não autenticado'));
       }
       
-      const userId = req.user.id;
-      
       // Obter o ID do escopo da requisição
       const scopeId = this._resolveScopeId(scopeIdResolver, req);
       
@@ -157,23 +128,12 @@ class RbacMiddleware {
         return next(new ForbiddenError('ID do escopo não fornecido'));
       }
       
-      // Verificar se é admin (para compatibilidade)
-      if (req.user.role === 'admin') {
-        return next();
-      }
-      
-      // Verificar papéis com escopo
-      const userRoles = await rbacRepository.getUserRoles(userId);
-      
-      // Verificar se o usuário tem o papel com o escopo correto
-      const hasScopedRole = userRoles.some(roleAssignment => {
-        if (!roleAssignment.role) return false;
-        
-        return roleAssignment.role.name === roleName && 
-               roleAssignment.scope === scope &&
-               (scope === 'global' || 
-                (roleAssignment.scopeId && roleAssignment.scopeId.toString() === scopeId.toString()));
-      });
+      // Usar serviço centralizado para verificar papel com escopo
+      const hasScopedRole = await authService.hasRole(
+        req.user.id, 
+        roleName, 
+        { scope, scopeId }
+      );
       
       if (hasScopedRole) {
         return next();
@@ -201,7 +161,10 @@ class RbacMiddleware {
         return next(new ForbiddenError('Usuário não autenticado'));
       }
       
-      const result = await policyFn(req, rbacRepository);
+      // Avaliação de política personalizada
+      // Esta função permite criar regras complexas que não se encaixam
+      // nos middlewares padrão
+      const result = await policyFn(req, req.user);
       
       if (result.allowed) {
         return next();
@@ -235,38 +198,22 @@ class RbacMiddleware {
         return next(new ForbiddenError('Usuário não autenticado'));
       }
       
-      const userId = req.user.id;
+      // Usar serviço centralizado para verificar todas as permissões
+      const hasAllPermissions = await authService.hasAllPermissions(
+        req.user.id,
+        permissionCodes,
+        this._resolveResourcePath(resourcePath, req),
+        { allowAdmin }
+      );
       
-      // Verificar se é um admin (quando permitido)
-      if (allowAdmin && req.user.role === 'admin') {
-        return next();
-      }
-      
-      // Verificar cada permissão
-      const resolvedResourcePath = this._resolveResourcePath(resourcePath, req);
-      const missingPermissions = [];
-      
-      for (const permissionCode of permissionCodes) {
-        const hasPermission = await rbacRepository.userHasPermission(
-          userId, 
-          permissionCode,
-          resolvedResourcePath
-        );
-        
-        if (!hasPermission) {
-          missingPermissions.push(permissionCode);
-        }
-      }
-      
-      if (missingPermissions.length === 0) {
+      if (hasAllPermissions) {
         return next();
       }
       
       // Registrar tentativa de acesso não autorizado
       this._logAccessDenied(req, 'Permissões necessárias não atendidas', {
         requiredPermissions: permissionCodes,
-        missingPermissions,
-        resourcePath: resolvedResourcePath
+        resourcePath: this._resolveResourcePath(resourcePath, req)
       });
       
       return next(new ForbiddenError('Permissão negada: faltam permissões necessárias'));
@@ -287,32 +234,22 @@ class RbacMiddleware {
         return next(new ForbiddenError('Usuário não autenticado'));
       }
       
-      const userId = req.user.id;
+      // Usar serviço centralizado para verificar qualquer permissão
+      const hasAnyPermission = await authService.hasAnyPermission(
+        req.user.id,
+        permissionCodes,
+        this._resolveResourcePath(resourcePath, req),
+        { allowAdmin }
+      );
       
-      // Verificar se é um admin (quando permitido)
-      if (allowAdmin && req.user.role === 'admin') {
+      if (hasAnyPermission) {
         return next();
-      }
-      
-      // Verificar se tem pelo menos uma permissão
-      const resolvedResourcePath = this._resolveResourcePath(resourcePath, req);
-      
-      for (const permissionCode of permissionCodes) {
-        const hasPermission = await rbacRepository.userHasPermission(
-          userId, 
-          permissionCode,
-          resolvedResourcePath
-        );
-        
-        if (hasPermission) {
-          return next();
-        }
       }
       
       // Registrar tentativa de acesso não autorizado
       this._logAccessDenied(req, 'Nenhuma permissão atendida', {
         requiredAnyOf: permissionCodes,
-        resourcePath: resolvedResourcePath
+        resourcePath: this._resolveResourcePath(resourcePath, req)
       });
       
       return next(new ForbiddenError('Permissão negada: nenhuma permissão suficiente'));
@@ -322,11 +259,11 @@ class RbacMiddleware {
   /**
    * Middleware para verificar ownership de um recurso
    * @param {Function|string} resourceIdResolver Função para extrair o ID do recurso ou caminho de parâmetro
-   * @param {Function} ownershipChecker Função que verifica se o usuário é dono do recurso
+   * @param {string} resourceType Tipo do recurso
    * @param {Object} options Opções adicionais
    * @returns {Function} Middleware de autorização
    */
-  checkOwnership(resourceIdResolver, ownershipChecker, options = {}) {
+  checkOwnership(resourceIdResolver, resourceType, options = {}) {
     const { 
       allowAdmin = true, 
       bypassPermission = null 
@@ -346,7 +283,7 @@ class RbacMiddleware {
       
       // Verificar permissão de bypass, se definida
       if (bypassPermission) {
-        const hasPermission = await rbacRepository.userHasPermission(
+        const hasPermission = await authService.hasPermission(
           userId, 
           bypassPermission
         );
@@ -363,8 +300,8 @@ class RbacMiddleware {
         return next(new ForbiddenError('ID do recurso não fornecido'));
       }
       
-      // Verificar ownership
-      const isOwner = await ownershipChecker(userId, resourceId, req);
+      // Verificar ownership usando o serviço centralizado
+      const isOwner = await authService.isResourceOwner(userId, resourceType, resourceId);
       
       if (isOwner) {
         return next();
@@ -373,52 +310,11 @@ class RbacMiddleware {
       // Registrar tentativa de acesso não autorizado
       this._logAccessDenied(req, 'Usuário não é proprietário do recurso', {
         resourceId,
+        resourceType,
         bypassPermission
       });
       
       return next(new ForbiddenError('Permissão negada: você não é o proprietário deste recurso'));
-    });
-  }
-
-  /**
-   * Middleware para exigir autenticação e injetar permissões no objeto de request
-   * @returns {Function} Middleware de injeção de permissões
-   */
-  injectPermissions() {
-    return asyncHandler(async (req, res, next) => {
-      if (!req.user) {
-        return next(new ForbiddenError('Usuário não autenticado'));
-      }
-      
-      // Adicionar métodos de verificação de permissão ao objeto req
-      req.rbac = {
-        hasPermission: async (permissionCode, resourcePath = null) => {
-          return await rbacRepository.userHasPermission(
-            req.user.id, 
-            permissionCode, 
-            this._resolveResourcePath(resourcePath, req)
-          );
-        },
-        
-        hasRole: async (roleName, scope = 'global', scopeId = null) => {
-          const userRoles = await rbacRepository.getUserRoles(req.user.id);
-          
-          return userRoles.some(roleAssignment => {
-            if (!roleAssignment.role) return false;
-            
-            return roleAssignment.role.name === roleName && 
-                   roleAssignment.scope === scope &&
-                   (scope === 'global' || 
-                    (scopeId && roleAssignment.scopeId.toString() === scopeId.toString()));
-          });
-        },
-        
-        getUserRoles: async () => {
-          return await rbacRepository.getUserRoles(req.user.id);
-        }
-      };
-      
-      next();
     });
   }
 
@@ -487,6 +383,19 @@ class RbacMiddleware {
       ip: req.ip,
       details
     });
+    
+    // Log no serviço de auditoria se necessário
+    try {
+      authService.logAuthEvent('ACCESS_DENIED', req.user, req.ip, {
+        reason,
+        ...details,
+        path: req.originalUrl,
+        method: req.method
+      });
+    } catch (error) {
+      // Ignorar erros no log de auditoria para não interromper o fluxo
+      logger.error(`Erro ao registrar auditoria de acesso negado: ${error.message}`);
+    }
   }
 }
 
@@ -503,7 +412,6 @@ module.exports = {
   requireAllPermissions: rbacMiddleware.requireAllPermissions.bind(rbacMiddleware),
   requireAnyPermission: rbacMiddleware.requireAnyPermission.bind(rbacMiddleware),
   checkOwnership: rbacMiddleware.checkOwnership.bind(rbacMiddleware),
-  injectPermissions: rbacMiddleware.injectPermissions.bind(rbacMiddleware),
   
   // Exportar a instância completa também para uso avançado
   rbacMiddleware

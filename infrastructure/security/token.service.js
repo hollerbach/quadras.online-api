@@ -3,13 +3,17 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const config = require('../config');
 const logger = require('../logging/logger');
-const authRepository = require('../database/mongodb/repositories/auth.repository');
 const { UnauthorizedError, BadRequestError } = require('../../shared/errors/api-error');
 
 /**
  * Serviço para gerenciamento de tokens JWT e refresh tokens
+ * Centraliza a lógica de tokens para evitar duplicações
  */
 class TokenService {
+  constructor(authRepository) {
+    this.authRepository = authRepository;
+  }
+
   /**
    * Gera um token JWT de acesso
    * @param {Object} payload Dados a serem codificados no token
@@ -41,10 +45,10 @@ class TokenService {
   async generateRefreshToken(user, ipAddress) {
     // Criar um token aleatório seguro
     const token = crypto.randomBytes(40).toString('hex');
-    const expires = new Date(Date.now() + parseInt(config.auth.jwt.refreshExpiresIn) * 1000);
+    const expires = new Date(Date.now() + this._parseExpiryTime(config.auth.jwt.refreshExpiresIn));
 
     // Salvar no banco de dados
-    const refreshToken = await authRepository.saveRefreshToken({
+    const refreshToken = await this.authRepository.saveRefreshToken({
       token,
       userId: user.id,
       userEmail: user.email,
@@ -77,9 +81,7 @@ class TokenService {
    * @returns {Promise<boolean>} Verdadeiro se o token estiver na blacklist
    */
   async isTokenBlacklisted(token) {
-    // Add debug logging to see if the token is being checked
-    console.log('Checking if token is blacklisted:', token?.substring(0, 10) + '...');
-    return await authRepository.isTokenBlacklisted(token);
+    return await this.authRepository.isTokenBlacklisted(token);
   }
   
   /**
@@ -90,7 +92,7 @@ class TokenService {
    * @returns {Promise<Object>} Token invalidado
    */
   async blacklistToken(token, type, expiresIn) {
-    return await authRepository.blacklistToken(token, type, expiresIn);
+    return await this.authRepository.blacklistToken(token, type, expiresIn);
   }
 
   /**
@@ -100,7 +102,30 @@ class TokenService {
    * @returns {Promise<Object>} Token revogado
    */
   async revokeRefreshToken(token, ipAddress) {
-    return await authRepository.revokeRefreshToken(token, ipAddress);
+    return await this.authRepository.revokeRefreshToken(token, ipAddress);
+  }
+
+  /**
+   * Valida um refresh token
+   * @param {string} token Refresh token a ser validado
+   * @returns {Promise<Object|null>} Informações do token se válido, null caso contrário
+   */
+  async validateRefreshToken(token) {
+    const refreshToken = await this.authRepository.findRefreshToken(token);
+    
+    if (!refreshToken) {
+      return null;
+    }
+    
+    if (refreshToken.revoked) {
+      return null;
+    }
+    
+    if (new Date(refreshToken.expires) < new Date()) {
+      return null;
+    }
+    
+    return refreshToken;
   }
 
   /**
@@ -110,25 +135,15 @@ class TokenService {
    * @returns {Promise<Object>} Novos tokens gerados
    */
   async refreshTokens(token, ipAddress) {
-    const refreshToken = await authRepository.findRefreshToken(token);
+    const refreshToken = await this.validateRefreshToken(token);
 
     if (!refreshToken) {
-      throw new UnauthorizedError('Token de atualização não encontrado');
-    }
-
-    if (refreshToken.revoked) {
-      throw new UnauthorizedError('Token de atualização foi revogado');
-    }
-
-    if (new Date(refreshToken.expires) < new Date()) {
-      throw new UnauthorizedError('Token de atualização expirado');
+      throw new UnauthorizedError('Refresh token inválido ou expirado');
     }
 
     // Gerar novo refresh token
-    const newRefreshToken = await this.generateRefreshToken(
-      { id: refreshToken.userId, email: refreshToken.userEmail },
-      ipAddress
-    );
+    const user = { id: refreshToken.userId, email: refreshToken.userEmail };
+    const newRefreshToken = await this.generateRefreshToken(user, ipAddress);
 
     // Revogar o token anterior
     await this.revokeRefreshToken(token, ipAddress);
@@ -157,6 +172,38 @@ class TokenService {
       throw new BadRequestError('Formato de token inválido');
     }
   }
+
+  /**
+   * Converte string de tempo para milissegundos
+   * @private
+   * @param {string|number} time Tempo em formato de string (ex: '7d', '1h', '30m') ou número em segundos
+   * @returns {number} Tempo em milissegundos
+   */
+  _parseExpiryTime(time) {
+    if (typeof time === 'number') {
+      return time * 1000;
+    }
+
+    const match = time.match(/^(\d+)([smhdw])$/);
+    if (!match) {
+      return 24 * 60 * 60 * 1000; // Default para 1 dia se formato não reconhecido
+    }
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+
+    const multipliers = {
+      s: 1000,
+      m: 60 * 1000,
+      h: 60 * 60 * 1000,
+      d: 24 * 60 * 60 * 1000,
+      w: 7 * 24 * 60 * 60 * 1000
+    };
+
+    return value * multipliers[unit];
+  }
 }
 
-module.exports = new TokenService();
+// Inicializar com as dependências
+const authRepository = require('../database/mongodb/repositories/auth.repository');
+module.exports = new TokenService(authRepository);

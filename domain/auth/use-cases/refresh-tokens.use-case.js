@@ -1,18 +1,22 @@
 // src/domain/auth/use-cases/refresh-tokens.use-case.js
-const logger = require('../../../infrastructure/logging/logger');
+const BaseAuthUseCase = require('./base-auth-use-case');
 const { UnauthorizedError } = require('../../../shared/errors/api-error');
 
 /**
  * Caso de uso para atualizar tokens usando refresh token
+ * Usa a classe base para reduzir duplicação
  */
-class RefreshTokensUseCase {
+class RefreshTokensUseCase extends BaseAuthUseCase {
   /**
    * @param {Object} tokenService Serviço de tokens
+   * @param {Object} authService Serviço de autenticação
    * @param {Object} auditService Serviço de auditoria (opcional)
    */
-  constructor(tokenService, auditService = null) {
-    this.tokenService = tokenService;
-    this.auditService = auditService;
+  constructor(tokenService, authService, auditService = null) {
+    super(
+      {},
+      { tokenService, authService, auditService }
+    );
   }
 
   /**
@@ -27,22 +31,20 @@ class RefreshTokensUseCase {
     }
 
     // Gerar novos tokens
-    const { accessToken, refreshToken: newRefreshToken } = await this.tokenService.refreshTokens(
+    const { accessToken, refreshToken: newRefreshToken } = await this.services.tokenService.refreshTokens(
       refreshToken,
       ipAddress
     );
 
     // Obter payload do token para registro de auditoria
-    const decoded = this.tokenService.decodeToken(accessToken);
+    const decoded = this.services.tokenService.decodeToken(accessToken);
     
-    // Registrar na auditoria, se disponível
-    if (this.auditService && decoded && decoded.id) {
-      await this.auditService.log({
-        action: 'TOKEN_REFRESH',
-        userId: decoded.id,
-        userEmail: decoded.email,
+    // Registrar evento de atualização de tokens
+    if (decoded && decoded.id) {
+      await this._logSecurityEvent('TOKEN_REFRESH', 
+        { id: decoded.id, email: decoded.email }, 
         ipAddress
-      });
+      );
     }
 
     return {

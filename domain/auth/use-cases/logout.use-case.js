@@ -1,17 +1,21 @@
 // src/domain/auth/use-cases/logout.use-case.js
-const logger = require('../../../infrastructure/logging/logger');
+const BaseAuthUseCase = require('./base-auth-use-case');
 
 /**
  * Caso de uso para realizar logout (revogação de tokens)
+ * Usa a classe base para reduzir duplicação
  */
-class LogoutUseCase {
+class LogoutUseCase extends BaseAuthUseCase {
   /**
    * @param {Object} tokenService Serviço de tokens
+   * @param {Object} authService Serviço de autenticação
    * @param {Object} auditService Serviço de auditoria (opcional)
    */
-  constructor(tokenService, auditService = null) {
-    this.tokenService = tokenService;
-    this.auditService = auditService;
+  constructor(tokenService, authService, auditService = null) {
+    super(
+      {},
+      { tokenService, authService, auditService }
+    );
   }
 
   /**
@@ -32,12 +36,12 @@ class LogoutUseCase {
     // Invalidar access token se fornecido
     if (accessToken) {
       // Obter payload do token sem verificar assinatura
-      const decoded = this.tokenService.decodeToken(accessToken);
+      const decoded = this.services.tokenService.decodeToken(accessToken);
 
       // Adicionar à blacklist pelo tempo restante de validade
       if (decoded && decoded.exp) {
         const timeToExpire = decoded.exp - Math.floor(Date.now() / 1000);
-        await this.tokenService.blacklistToken(
+        await this.services.tokenService.blacklistToken(
           accessToken,
           'access',
           timeToExpire > 0 ? timeToExpire : 3600
@@ -49,22 +53,14 @@ class LogoutUseCase {
     // Revogar refresh token se fornecido
     if (refreshToken) {
       // Revogar refresh token
-      await this.tokenService.revokeRefreshToken(refreshToken, ipAddress);
+      await this.services.tokenService.revokeRefreshToken(refreshToken, ipAddress);
       results.refreshTokenRevoked = true;
     }
 
-    // Registrar na auditoria
-    if (this.auditService && user) {
-      await this.auditService.log({
-        action: 'LOGOUT',
-        userId: user.id,
-        userEmail: user.email,
-        ipAddress,
-        details: results
-      });
+    // Registrar evento de logout
+    if (user) {
+      await this._logSecurityEvent('LOGOUT', user, ipAddress, results);
     }
-
-    logger.info(`Logout realizado: ${user ? user.email : 'Usuário anônimo'} (${ipAddress})`);
 
     return {
       message: 'Logout realizado com sucesso',

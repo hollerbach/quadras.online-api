@@ -1,12 +1,12 @@
 // src/domain/auth/use-cases/login.use-case.js
-const logger = require('../../../infrastructure/logging/logger');
+const BaseAuthUseCase = require('./base-auth-use-case');
 const { UnauthorizedError, TooManyRequestsError } = require('../../../shared/errors/api-error');
 
 /**
  * Caso de uso para autenticação de usuário (login)
- * Responsável pela lógica de negócio do processo de login
+ * Usa a classe base para reduzir duplicação
  */
-class LoginUseCase {
+class LoginUseCase extends BaseAuthUseCase {
   /**
    * @param {Object} userRepository Repositório de usuários
    * @param {Object} tokenService Serviço de tokens
@@ -14,10 +14,10 @@ class LoginUseCase {
    * @param {Object} auditService Serviço de auditoria (opcional)
    */
   constructor(userRepository, tokenService, authService, auditService = null) {
-    this.userRepository = userRepository;
-    this.tokenService = tokenService;
-    this.authService = authService;
-    this.auditService = auditService;
+    super(
+      { userRepository },
+      { tokenService, authService, auditService }
+    );
   }
 
   /**
@@ -32,13 +32,13 @@ class LoginUseCase {
       // Validar entrada
       this._validateInput(email, password);
 
-      // Verificar credenciais através do serviço de autenticação
-      // Isso delega as verificações de usuário para o serviço centralizado
-      const user = await this.authService.verifyCredentials(email, password, ipAddress);
+      // Verificar credenciais através do serviço centralizado
+      // Isso delega as verificações para o serviço de autenticação
+      const user = await this.services.authService.verifyCredentials(email, password, ipAddress);
 
       // Se chegamos aqui, as credenciais são válidas
       // Resetar contagem de tentativas após login bem-sucedido
-      await this.userRepository.resetLoginAttempts(user.id);
+      await this.repositories.userRepository.resetLoginAttempts(user.id);
 
       // Verificar se 2FA está ativado
       if (user.twoFactorEnabled) {
@@ -53,12 +53,8 @@ class LoginUseCase {
         throw error;
       }
 
-      // Registrar erro inesperado
-      logger.error(`Erro inesperado no login: ${error.message}`, { 
-        email, 
-        ipAddress, 
-        stack: error.stack 
-      });
+      // Registrar erro inesperado usando método da classe base
+      this._logFailedLoginAttempt(null, email, ipAddress, `Erro inesperado: ${error.message}`);
       
       // Retornar erro genérico para não expor detalhes internos
       throw new UnauthorizedError('Falha na autenticação');
@@ -80,9 +76,6 @@ class LoginUseCase {
     if (typeof email !== 'string' || typeof password !== 'string') {
       throw new UnauthorizedError('Formato de credenciais inválido');
     }
-
-    // Poderíamos adicionar validações mais rigorosas aqui, 
-    // mas normalmente isso já é feito pelos validadores da API
   }
 
   /**
@@ -94,7 +87,7 @@ class LoginUseCase {
    */
   async _handle2FARequired(user, ipAddress) {
     // Gerar token temporário para a etapa de 2FA
-    const tempToken = this.tokenService.generateTempToken({ 
+    const tempToken = this.services.tokenService.generateTempToken({ 
       id: user.id, 
       email: user.email,
       is2FA: true // Flag para indicar que é um token para fluxo 2FA
@@ -104,8 +97,6 @@ class LoginUseCase {
     await this._logAuditEvent('LOGIN_2FA_REQUIRED', user, ipAddress, {
       success: true
     });
-
-    logger.info(`Login parcial (2FA necessário): ${user.email} (${ipAddress})`);
 
     return {
       requires2FA: true,
@@ -123,47 +114,25 @@ class LoginUseCase {
    */
   async _generateAuthTokens(user, ipAddress) {
     // Gerar token de acesso (JWT)
-    const accessToken = this.tokenService.generateAccessToken({
+    const accessToken = this.services.tokenService.generateAccessToken({
       id: user.id,
       email: user.email,
       role: user.role
     });
 
     // Gerar refresh token (persistido no banco)
-    const refreshToken = await this.tokenService.generateRefreshToken(user, ipAddress);
+    const refreshToken = await this.services.tokenService.generateRefreshToken(user, ipAddress);
 
     // Registrar evento de login bem-sucedido
     await this._logAuditEvent('LOGIN', user, ipAddress, {
       user2FA: user.twoFactorEnabled
     });
 
-    logger.info(`Login bem-sucedido: ${user.email} (${ipAddress})`);
-
     return {
       accessToken,
       refreshToken: refreshToken.token,
       user: user.toSafeObject()
     };
-  }
-
-  /**
-   * Registra um evento de auditoria
-   * @private
-   * @param {string} action Ação a ser registrada
-   * @param {Object} user Usuário relacionado
-   * @param {string} ipAddress Endereço IP
-   * @param {Object} details Detalhes adicionais
-   */
-  async _logAuditEvent(action, user, ipAddress, details = {}) {
-    if (this.auditService) {
-      await this.auditService.log({
-        action,
-        userId: user.id,
-        userEmail: user.email,
-        ipAddress,
-        details
-      });
-    }
   }
 }
 

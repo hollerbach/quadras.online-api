@@ -3,23 +3,15 @@ const AuthUseCaseFactory = require('../../../domain/auth/factories/auth-use-case
 const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
 const authService = require('../../../infrastructure/security/auth.service');
 const tokenService = require('../../../infrastructure/security/token.service');
-const twoFactorService = require('../../../infrastructure/security/two-factor.service');
 const config = require('../../../infrastructure/config');
 const securityConfig = require('../../../infrastructure/security/security.config');
 const logger = require('../../../infrastructure/logging/logger');
 const { BadRequestError, UnauthorizedError } = require('../../../shared/errors/api-error');
 
-// Auditoria (opcional)
-let auditService;
-try {
-  auditService = require('../../../infrastructure/logging/audit.service');
-} catch (error) {
-  console.warn('Serviço de auditoria não disponível');
-}
-
 /**
  * Controlador para rotas de autenticação
  * Responsável por orquestrar os casos de uso e transformar seus resultados em respostas HTTP
+ * Usa o serviço centralizado de autenticação para verificações
  */
 class AuthController {
   /**
@@ -31,6 +23,13 @@ class AuthController {
     // Usar caso de uso através da factory para seguir o padrão DI
     const registerUseCase = AuthUseCaseFactory.createRegisterUserUseCase();
     const result = await registerUseCase.execute(req.body, req.ip);
+
+    // Registrar evento de auditoria
+    await authService.logAuthEvent('REGISTER', 
+      { id: result.user.id, email: result.user.email }, 
+      req.ip, 
+      { role: req.body.role || 'user' }
+    );
 
     res.status(201).json({
       message: 'Usuário registrado com sucesso. Verifique seu e-mail para ativar a conta.',
@@ -65,8 +64,7 @@ class AuthController {
     const { email, password } = req.body;
     const ipAddress = req.ip;
 
-    // Usar o serviço de autenticação para verificar credenciais
-    // Isso centraliza a lógica de autenticação e evita duplicação
+    // Usar o serviço centralizado para verificar credenciais
     const user = await authService.verifyCredentials(email, password, ipAddress);
 
     // Verificar se 2FA está ativado
@@ -77,7 +75,8 @@ class AuthController {
         is2FA: true
       });
 
-      this._logAuditEvent('LOGIN_2FA_REQUIRED', user, ipAddress);
+      // Registrar evento de autenticação 2FA necessária
+      await authService.logAuthEvent('LOGIN_2FA_REQUIRED', user, ipAddress);
 
       return res.status(206).json({
         message: '2FA necessário',
@@ -98,7 +97,7 @@ class AuthController {
     this._setRefreshTokenCookie(res, refreshToken.token);
 
     // Registrar evento de login bem-sucedido
-    this._logAuditEvent('LOGIN', user, ipAddress, { 
+    await authService.logAuthEvent('LOGIN', user, ipAddress, { 
       user2FA: user.twoFactorEnabled 
     });
 
@@ -117,12 +116,28 @@ class AuthController {
     const { token, tempToken } = req.body;
     const ipAddress = req.ip;
 
+    // Verificar token temporário usando o serviço centralizado
+    const decoded = await authService.verifyToken(tempToken, { require2FAToken: true });
+
+    // Buscar usuário
+    const user = await authService.verifyUser(decoded.id, {
+      requireVerified: true,
+      requireActive: true
+    });
+
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestError('2FA não está habilitado para este usuário');
+    }
+
     // Usar caso de uso para verificação 2FA
     const verify2FAUseCase = AuthUseCaseFactory.createVerify2FAUseCase();
     const result = await verify2FAUseCase.execute(token, tempToken, ipAddress);
 
     // Definir cookie HTTP-only para refresh token
     this._setRefreshTokenCookie(res, result.refreshToken);
+
+    // Registrar evento de autenticação 2FA completada
+    await authService.logAuthEvent('LOGIN_2FA_SUCCESS', user, ipAddress);
 
     // Retornar apenas o token de acesso e usuário (não o refresh token)
     res.status(200).json({
@@ -140,12 +155,8 @@ class AuthController {
     const { code, tempToken } = req.body;
     const ipAddress = req.ip;
 
-    // Verificar e decodificar o token temporário
-    const decoded = tokenService.verifyAccessToken(tempToken);
-
-    if (!decoded || !decoded.is2FA) {
-      throw new BadRequestError('Token temporário inválido para fluxo 2FA');
-    }
+    // Verificar token temporário usando o serviço centralizado
+    const decoded = await authService.verifyToken(tempToken, { require2FAToken: true });
 
     // Buscar usuário
     const user = await authService.verifyUser(decoded.id, {
@@ -161,7 +172,7 @@ class AuthController {
     const recoveryCodeValid = await user.validateRecoveryCode(code);
 
     if (!recoveryCodeValid) {
-      this._logAuditEvent('LOGIN_2FA_RECOVERY_FAILED', user, ipAddress);
+      await authService.logAuthEvent('LOGIN_2FA_RECOVERY_FAILED', user, ipAddress);
       throw new UnauthorizedError('Código de recuperação inválido');
     }
 
@@ -180,8 +191,8 @@ class AuthController {
     // Definir cookie HTTP-only para refresh token
     this._setRefreshTokenCookie(res, refreshToken.token);
 
-    // Registrar na auditoria
-    this._logAuditEvent('LOGIN_2FA_RECOVERY_SUCCESS', user, ipAddress);
+    // Registrar evento de login com código de recuperação
+    await authService.logAuthEvent('LOGIN_2FA_RECOVERY_SUCCESS', user, ipAddress);
 
     res.status(200).json({
       accessToken,
@@ -202,6 +213,12 @@ class AuthController {
     // Usar caso de uso para configuração 2FA
     const setup2FAUseCase = AuthUseCaseFactory.createSetup2FAUseCase();
     const result = await setup2FAUseCase.execute(userId, ipAddress);
+
+    // Registrar evento de configuração 2FA
+    await authService.logAuthEvent('2FA_SETUP', 
+      { id: userId, email: req.user.email }, 
+      ipAddress
+    );
 
     res.status(200).json({
       qrCode: result.qrCode,
@@ -225,6 +242,12 @@ class AuthController {
     const disable2FAUseCase = AuthUseCaseFactory.createDisable2FAUseCase();
     const result = await disable2FAUseCase.execute(userId, token, ipAddress);
 
+    // Registrar evento de desativação 2FA
+    await authService.logAuthEvent('2FA_DISABLED', 
+      { id: userId, email: req.user.email }, 
+      ipAddress
+    );
+
     res.status(200).json({ 
       message: result.message || '2FA desativado com sucesso',
       success: result.success
@@ -244,6 +267,9 @@ class AuthController {
     // Usar caso de uso para logout
     const logoutUseCase = AuthUseCaseFactory.createLogoutUseCase();
     const result = await logoutUseCase.execute(token, refreshToken, req.user, ipAddress);
+
+    // Registrar evento de logout
+    await authService.logAuthEvent('LOGOUT', req.user, ipAddress);
 
     // Limpar cookie
     this._clearRefreshTokenCookie(res);
@@ -288,6 +314,9 @@ class AuthController {
     // Usar caso de uso para solicitar redefinição de senha
     const requestResetUseCase = AuthUseCaseFactory.createRequestPasswordResetUseCase();
     const result = await requestResetUseCase.execute(email, ipAddress);
+
+    // Nota: o evento de auditoria é registrado dentro do caso de uso
+    // apenas se o email for encontrado
 
     res.status(200).json({
       message: result.message || 'Instruções de redefinição enviadas para o e-mail, se estiver cadastrado'
@@ -341,8 +370,8 @@ class AuthController {
     // Definir cookie HTTP-only para refresh token (será enviado nas próximas requisições)
     this._setRefreshTokenCookie(res, refreshToken.token);
 
-    // Registrar na auditoria
-    this._logAuditEvent('LOGIN_GOOGLE', user, ipAddress);
+    // Registrar evento de login via Google
+    await authService.logAuthEvent('LOGIN_GOOGLE', user, ipAddress);
 
     // Redirecionar para frontend com token
     const redirectUrl = `${config.oauth.google.redirectUrl}/login/oauth/success?token=${accessToken}`;
@@ -371,12 +400,12 @@ class AuthController {
    * @param {Response} res Express Response
    */
   async getCurrentUser(req, res) {
-    // req.user já contém informações básicas, mas vamos buscar dados completos
-    const user = await userRepository.findById(req.user.id);
-    
-    if (!user) {
-      throw new BadRequestError('Usuário não encontrado');
-    }
+    // Buscar usuário usando o serviço centralizado
+    const user = await authService.verifyUser(req.user.id, { 
+      requireActive: true,
+      requireVerified: false,
+      checkLocked: false
+    });
     
     res.status(200).json(user.toSafeObject());
   }
@@ -408,28 +437,6 @@ class AuthController {
       maxAge: 0 
     };
     res.clearCookie('refreshToken', cookieOptions);
-  }
-
-  /**
-   * Registra um evento de auditoria
-   * @private
-   * @param {string} action Ação a ser registrada
-   * @param {Object} user Usuário relacionado
-   * @param {string} ipAddress Endereço IP
-   * @param {Object} details Detalhes adicionais
-   */
-  async _logAuditEvent(action, user, ipAddress, details = {}) {
-    if (auditService) {
-      await auditService.log({
-        action,
-        userId: user.id,
-        userEmail: user.email,
-        ipAddress,
-        details
-      });
-    }
-    
-    logger.info(`Auth: ${action} - ${user.email} (${ipAddress})`);
   }
 }
 
