@@ -1,7 +1,7 @@
 {
-  "name": "mercado-digital-api",
+  "name": "quadras-online-api",
   "version": "1.0.0",
-  "description": "API de autenticação para Mercearia Digital",
+  "description": "API de autenticação para Quadras Online",
   "main": "server.js",
   "scripts": {
     "start": "NODE_ENV=production node server.js",
@@ -14,7 +14,7 @@
     "format": "prettier --write .",
     "prepare": "husky install",
     "docker:dev": "docker-compose up",
-    "docker:build": "docker build -t mercado-digital-api .",
+    "docker:build": "docker build -t quadras-online-api .",
     "seed": "node ./scripts/seed.js"
   },
   "keywords": [
@@ -24,7 +24,7 @@
     "express",
     "mongodb"
   ],
-  "author": "Mercearia Digital",
+  "author": "Frederico Hollerbach",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {

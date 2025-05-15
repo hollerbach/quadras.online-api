@@ -134,8 +134,8 @@ Backend para o sistema de Agendamento de Quadras, implementado com arquitetura l
 
 ```bash
 # Clonar o repositório
-git clone https://github.com/seu-usuario/mercado-digital-api.git
-cd mercado-digital-api
+git clone https://github.com/seu-usuario/quadras-online-api.git
+cd quadras-online-api
 
 # Configurar variáveis de ambiente
 cp .env.example .env
@@ -148,8 +148,8 @@ npm run docker:dev
 
 ```bash
 # Clonar o repositório
-git clone https://github.com/seu-usuario/mercado-digital-api.git
-cd mercado-digital-api
+git clone https://github.com/seu-usuario/quadras-online-api.git
+cd quadras-online-api
 
 # Instalar dependências
 npm install
@@ -203,8 +203,8 @@ JWT_REFRESH_EXPIRES_IN=7d
 MONGODB_CLUSTER=seu_cluster_mongodb
 DB_USER=seu_usuario_db
 DB_PASS=sua_senha_db
-DB_NAME=mercearia_digital
-MONGODB_APP=mercearia_digital
+DB_NAME=quadras_online
+MONGODB_APP=quadras_online
 
 # Email
 EMAIL_HOST=smtp.example.com
@@ -215,7 +215,7 @@ EMAIL_PASS=sua_senha_email
 # Segurança
 APP_KEY=sua_chave_app_segura
 RECAPTCHA_SECRET=seu_recaptcha_secret
-ALLOWED_ORIGINS=https://mercearia.digital,http://localhost:5173
+ALLOWED_ORIGINS=https://quadras.online,http://localhost:5173
 
 # OAuth
 GOOGLE_CLIENT_ID=seu_google_client_id.apps.googleusercontent.com
