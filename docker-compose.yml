@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_ENV: development
-    container_name: mercado-digital-api
+    container_name: agendamento-quadras-api
     restart: unless-stopped
     ports:
       - '3000:3000'
@@ -20,23 +20,23 @@ services:
       - JWT_SECRET=dev_jwt_secret_replace_in_production
       - JWT_EXPIRES_IN=1h
       - JWT_REFRESH_EXPIRES_IN=7d
-      - MONGODB_CLUSTER=mongodb
-      - DB_USER=mercearia_user
-      - DB_PASS=mercearia_pass
-      - DB_NAME=mercearia_digital
-      - MONGODB_APP=mercearia_digital_dev
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=quadras_user
+      - DB_PASS=quadras_pass
+      - DB_NAME=quadras_online
       - APP_KEY=dev_app_key_1234567890
       - EMAIL_HOST=mailhog
       - EMAIL_PORT=1025
-      - EMAIL_USER=noreply@mercearia.digital
+      - EMAIL_USER=noreply@quadras.online
       - EMAIL_PASS=email_password
       - RECAPTCHA_SECRET=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
     depends_on:
-      - mongodb
+      - mysql
       - mailhog
     networks:
-      - mercearia-network
+      - quadras-network
     logging:
       driver: 'json-file'
       options:
@@ -44,36 +44,53 @@ services:
         max-file: '3'
     command: npm run dev
 
-  mongodb:
-    image: mongo:6
-    container_name: mercado-digital-mongo
+  mysql:
+    image: mysql:8.0
+    container_name: agendamento-quadras-mysql
     restart: unless-stopped
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=example
-      - MONGO_INITDB_DATABASE=mercearia_digital
+      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_DATABASE=quadras_online
+      - MYSQL_USER=quadras_user
+      - MYSQL_PASSWORD=quadras_pass
     volumes:
-      - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-      - mongodb_data:/data/db
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d
+      - mysql_data:/var/lib/mysql
     ports:
-      - '27017:27017'
+      - '3306:3306'
     networks:
-      - mercearia-network
-    command: [--auth]
+      - quadras-network
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "quadras_user", "-pquadras_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   mailhog:
     image: mailhog/mailhog
-    container_name: mercado-digital-mailhog
+    container_name: agendamento-quadras-mailhog
     restart: unless-stopped
     ports:
       - '1025:1025' # SMTP Server
       - '8025:8025' # Web UI
     networks:
-      - mercearia-network
+      - quadras-network
+
+  adminer:
+    image: adminer
+    container_name: agendamento-quadras-adminer
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    depends_on:
+      - mysql
+    networks:
+      - quadras-network
 
 networks:
-  mercearia-network:
+  quadras-network:
     driver: bridge
 
 volumes:
-  mongodb_data:
+  mysql_data:

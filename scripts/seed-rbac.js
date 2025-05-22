@@ -1,10 +1,11 @@
 // scripts/seed-rbac.js
 require('dotenv').config();
-const mongoose = require('mongoose');
-const { Role, Permission, Resource } = require('../infrastructure/database/mongodb/models/rbac.models');
-const User = require('../infrastructure/database/mongodb/models/user.model');
+const { Sequelize } = require('sequelize');
 const bcrypt = require('bcryptjs');
+const { v4: uuidv4 } = require('uuid');
 const config = require('../infrastructure/config');
+const { connectToDatabase, closeConnection } = require('../infrastructure/database/mysql/connection');
+const defineModels = require('../infrastructure/database/mysql/models');
 
 // Dados básicos de permissões para o sistema
 const permissions = [
@@ -361,26 +362,49 @@ const roles = [
 const seedRbacData = async () => {
   try {
     // Conectar ao banco de dados
-    await mongoose.connect(config.db.uri);
-    console.log('Conectado ao MongoDB');
+    await connectToDatabase();
+    console.log('Conectado ao MySQL');
+
+    // Obter modelos
+    const models = defineModels();
+
+    // Sincronizar tabelas (criar se não existirem)
+    await models.User.sequelize.sync();
+    console.log('Tabelas sincronizadas');
 
     // Limpar dados existentes (opcional - cuidado em produção)
     console.log('Limpando dados existentes...');
-    await Permission.deleteMany({});
-    await Resource.deleteMany({});
-    await Role.deleteMany({});
+    await models.RolePermissionResource.destroy({ where: {} });
+    await models.RolePermission.destroy({ where: {} });
+    await models.UserRole.destroy({ where: {} });
+    await models.Permission.destroy({ where: {} });
+    await models.Resource.destroy({ where: {} });
+    await models.Role.destroy({ where: {} });
     
     // Não excluímos usuários para preservar dados existentes
-    // Apenas atualizaremos a estrutura de papéis
 
     // 1. Criar permissões
     console.log('Criando permissões...');
-    const createdPermissions = await Permission.insertMany(permissions);
+    const createdPermissions = [];
+    for (const permData of permissions) {
+      const permission = await models.Permission.create({
+        id: uuidv4(),
+        ...permData
+      });
+      createdPermissions.push(permission);
+    }
     console.log(`${createdPermissions.length} permissões criadas`);
 
     // 2. Criar recursos
     console.log('Criando recursos...');
-    const createdResources = await Resource.insertMany(resources);
+    const createdResources = [];
+    for (const resData of resources) {
+      const resource = await models.Resource.create({
+        id: uuidv4(),
+        ...resData
+      });
+      createdResources.push(resource);
+    }
     console.log(`${createdResources.length} recursos criados`);
 
     // 3. Criar papéis
@@ -388,17 +412,23 @@ const seedRbacData = async () => {
     const createdRoles = [];
     
     for (const roleData of roles) {
-      const role = await Role.create(roleData);
+      const role = await models.Role.create({
+        id: uuidv4(),
+        ...roleData
+      });
       createdRoles.push(role);
       
       // Se for o papel de admin, atribuir todas as permissões com todos os recursos
       if (roleData.name === 'admin') {
-        const permissionEntries = [];
-        
         for (const permission of createdPermissions) {
-          // Adicionar permissão com todos os recursos relevantes dependendo da categoria
-          const permissionResources = [];
+          // Criar relacionamento papel-permissão
+          const rolePermission = await models.RolePermission.create({
+            id: uuidv4(),
+            roleId: role.id,
+            permissionId: permission.id
+          });
           
+          // Adicionar recursos relevantes para cada permissão
           for (const resource of createdResources) {
             // Atribuir recursos com base na categoria da permissão
             if (
@@ -409,27 +439,19 @@ const seedRbacData = async () => {
               (permission.category === 'report' && (resource.path.includes('reports') || resource.path.includes('admin/reports'))) ||
               (permission.category === 'system')
             ) {
-              permissionResources.push({
-                resource: resource._id,
+              await models.RolePermissionResource.create({
+                id: uuidv4(),
+                rolePermissionId: rolePermission.id,
+                resourceId: resource.id,
                 conditions: {}
               });
             }
           }
-          
-          permissionEntries.push({
-            permission: permission._id,
-            resources: permissionResources
-          });
         }
-        
-        // Atualizar o papel com todas as permissões
-        role.permissions = permissionEntries;
-        await role.save();
       }
       
       // Para o papel de gerente, atribuir permissões limitadas
       if (roleData.name === 'gerente') {
-        const permissionEntries = [];
         const allowedPermissionCodes = [
           'USER_VIEW', 'USER_EDIT',
           'PRODUCT_VIEW', 'PRODUCT_EDIT',
@@ -440,11 +462,15 @@ const seedRbacData = async () => {
         
         for (const permission of createdPermissions) {
           if (allowedPermissionCodes.includes(permission.code)) {
-            // Adicionar permissão com todos os recursos relevantes
-            const permissionResources = [];
+            // Criar relacionamento papel-permissão
+            const rolePermission = await models.RolePermission.create({
+              id: uuidv4(),
+              roleId: role.id,
+              permissionId: permission.id
+            });
             
+            // Adicionar recursos relevantes
             for (const resource of createdResources) {
-              // Lógica similar à do admin, mas só para os recursos permitidos
               if (
                 (permission.category === 'user' && (resource.path.includes('users') || resource.path.includes('admin/users'))) ||
                 (permission.category === 'product' && (resource.path.includes('products') || resource.path.includes('admin/products'))) ||
@@ -452,28 +478,20 @@ const seedRbacData = async () => {
                 (permission.category === 'delivery' && resource.path.includes('delivery')) ||
                 (permission.category === 'report' && (resource.path.includes('reports') || resource.path.includes('admin/reports')))
               ) {
-                permissionResources.push({
-                  resource: resource._id,
+                await models.RolePermissionResource.create({
+                  id: uuidv4(),
+                  rolePermissionId: rolePermission.id,
+                  resourceId: resource.id,
                   conditions: {}
                 });
               }
             }
-            
-            permissionEntries.push({
-              permission: permission._id,
-              resources: permissionResources
-            });
           }
         }
-        
-        // Atualizar o papel com as permissões permitidas
-        role.permissions = permissionEntries;
-        await role.save();
       }
       
       // Para o papel de vendedor, atribuir permissões específicas de vendas
       if (roleData.name === 'vendedor') {
-        const permissionEntries = [];
         const allowedPermissionCodes = [
           'PRODUCT_VIEW',
           'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_PROCESS',
@@ -482,65 +500,60 @@ const seedRbacData = async () => {
         
         for (const permission of createdPermissions) {
           if (allowedPermissionCodes.includes(permission.code)) {
-            // Adicionar permissão com recursos relevantes
-            const permissionResources = [];
+            // Criar relacionamento papel-permissão
+            const rolePermission = await models.RolePermission.create({
+              id: uuidv4(),
+              roleId: role.id,
+              permissionId: permission.id
+            });
             
+            // Adicionar recursos relevantes
             for (const resource of createdResources) {
               if (
                 (permission.category === 'product' && resource.path.includes('products')) ||
                 (permission.category === 'order' && resource.path.includes('orders')) ||
                 (permission.category === 'delivery' && resource.path.includes('delivery'))
               ) {
-                permissionResources.push({
-                  resource: resource._id,
+                await models.RolePermissionResource.create({
+                  id: uuidv4(),
+                  rolePermissionId: rolePermission.id,
+                  resourceId: resource.id,
                   conditions: {}
                 });
               }
             }
-            
-            permissionEntries.push({
-              permission: permission._id,
-              resources: permissionResources
-            });
           }
         }
-        
-        // Atualizar o papel com as permissões permitidas
-        role.permissions = permissionEntries;
-        await role.save();
       }
       
       // Para o papel de estoquista, atribuir permissões específicas de estoque
       if (roleData.name === 'estoquista') {
-        const permissionEntries = [];
         const allowedPermissionCodes = [
           'PRODUCT_VIEW', 'PRODUCT_EDIT'
         ];
         
         for (const permission of createdPermissions) {
           if (allowedPermissionCodes.includes(permission.code)) {
-            // Adicionar permissão com recursos relevantes
-            const permissionResources = [];
+            // Criar relacionamento papel-permissão
+            const rolePermission = await models.RolePermission.create({
+              id: uuidv4(),
+              roleId: role.id,
+              permissionId: permission.id
+            });
             
+            // Adicionar recursos relevantes
             for (const resource of createdResources) {
               if (permission.category === 'product' && resource.path.includes('products')) {
-                permissionResources.push({
-                  resource: resource._id,
+                await models.RolePermissionResource.create({
+                  id: uuidv4(),
+                  rolePermissionId: rolePermission.id,
+                  resourceId: resource.id,
                   conditions: {}
                 });
               }
             }
-            
-            permissionEntries.push({
-              permission: permission._id,
-              resources: permissionResources
-            });
           }
         }
-        
-        // Atualizar o papel com as permissões permitidas
-        role.permissions = permissionEntries;
-        await role.save();
       }
     }
     
@@ -549,55 +562,65 @@ const seedRbacData = async () => {
     // 4. Atualizar usuários existentes para o novo modelo de papéis
     console.log('Atualizando usuários para o novo modelo RBAC...');
     
-    // Encontrar o papel de admin
-    const adminRole = await Role.findOne({ name: 'admin' });
-    const userRole = await Role.findOne({ name: 'cliente' });
+    // Encontrar os papéis
+    const adminRole = createdRoles.find(r => r.name === 'admin');
+    const userRole = createdRoles.find(r => r.name === 'cliente');
     
     if (adminRole && userRole) {
       // Atualizar todos os usuários com papel 'admin' para o novo modelo
-      const adminUsers = await User.find({ role: 'admin' });
+      const adminUsers = await models.User.findAll({ where: { role: 'admin' } });
+      
       for (const user of adminUsers) {
         // Verificar se o usuário já tem o papel atribuído
-        const hasAdminRole = user.roles && user.roles.some(r => 
-          r.role.toString() === adminRole._id.toString() && r.scope === 'global'
-        );
+        const hasAdminRole = await models.UserRole.findOne({
+          where: {
+            userId: user.id,
+            roleId: adminRole.id,
+            scope: 'global'
+          }
+        });
         
         if (!hasAdminRole) {
-          user.roles = user.roles || [];
-          user.roles.push({
-            role: adminRole._id,
+          await models.UserRole.create({
+            id: uuidv4(),
+            userId: user.id,
+            roleId: adminRole.id,
             assignedAt: new Date(),
             scope: 'global'
           });
-          await user.save();
         }
       }
       console.log(`${adminUsers.length} usuários admin atualizados`);
       
       // Atualizar todos os usuários com papel 'user' para o novo modelo
-      const normalUsers = await User.find({ role: 'user' });
+      const normalUsers = await models.User.findAll({ where: { role: 'user' } });
+      
       for (const user of normalUsers) {
         // Verificar se o usuário já tem o papel atribuído
-        const hasUserRole = user.roles && user.roles.some(r => 
-          r.role.toString() === userRole._id.toString() && r.scope === 'global'
-        );
+        const hasUserRole = await models.UserRole.findOne({
+          where: {
+            userId: user.id,
+            roleId: userRole.id,
+            scope: 'global'
+          }
+        });
         
         if (!hasUserRole) {
-          user.roles = user.roles || [];
-          user.roles.push({
-            role: userRole._id,
+          await models.UserRole.create({
+            id: uuidv4(),
+            userId: user.id,
+            roleId: userRole.id,
             assignedAt: new Date(),
             scope: 'global'
           });
-          await user.save();
         }
       }
       console.log(`${normalUsers.length} usuários normais atualizados`);
     }
 
     // 5. Criar um admin padrão se não existir
-    const adminEmail = 'admin@mercearia.com';
-    let adminUser = await User.findOne({ email: adminEmail });
+    const adminEmail = 'admin@quadras.com';
+    let adminUser = await models.User.findOne({ where: { email: adminEmail } });
     
     if (!adminUser) {
       console.log('Criando usuário admin padrão...');
@@ -606,19 +629,24 @@ const seedRbacData = async () => {
       const passwordHash = await bcrypt.hash('admin@123', config.auth.password.saltRounds);
       
       // Criar usuário admin
-      adminUser = await User.create({
+      adminUser = await models.User.create({
+        id: uuidv4(),
         email: adminEmail,
         password: passwordHash,
         role: 'admin',
         verified: true,
         active: true,
         name: 'Administrador',
-        surname: 'Sistema',
-        roles: [{
-          role: adminRole._id,
-          assignedAt: new Date(),
-          scope: 'global'
-        }]
+        surname: 'Sistema'
+      });
+      
+      // Atribuir papel de admin
+      await models.UserRole.create({
+        id: uuidv4(),
+        userId: adminUser.id,
+        roleId: adminRole.id,
+        assignedAt: new Date(),
+        scope: 'global'
       });
       
       console.log('Usuário admin padrão criado');
@@ -629,8 +657,8 @@ const seedRbacData = async () => {
     console.error('Erro ao fazer seed dos dados RBAC:', error);
   } finally {
     // Fechar conexão com o banco de dados
-    await mongoose.disconnect();
-    console.log('Conexão com MongoDB fechada');
+    await closeConnection();
+    console.log('Conexão com MySQL fechada');
   }
 };
 

@@ -1,5 +1,5 @@
 # Usar versão específica do Node.js para consistência
-FROM node:18-alpine
+FROM node:22-alpine
 
 # Definir diretório de trabalho
 WORKDIR /app

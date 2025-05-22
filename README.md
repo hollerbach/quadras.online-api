@@ -1,6 +1,6 @@
 # Agendamento de Quadras Online API
 
-Backend para o sistema de Agendamento de Quadras, implementado com arquitetura limpa (Clean Architecture) e Domain-Driven Design (DDD), com suporte a autenticação em dois fatores, verificação de e-mail, OAuth 2.0, RBAC avançado e todas as melhores práticas de segurança.
+Backend para o sistema de Agendamento de Quadras, implementado com arquitetura limpa (Clean Architecture) e Domain-Driven Design (DDD), utilizando MySQL como banco de dados, com suporte a autenticação em dois fatores, verificação de e-mail, OAuth 2.0, RBAC avançado e todas as melhores práticas de segurança.
 
 ## Características
 
@@ -10,6 +10,12 @@ Backend para o sistema de Agendamento de Quadras, implementado com arquitetura l
   - Camadas bem definidas: Domain, Application, Infrastructure, Interfaces
   - Padrão de Factory para injeção de dependências
   - Fácil adição de novos domínios funcionais
+
+- **Banco de Dados MySQL**
+  - Utiliza Sequelize ORM para abstração do banco de dados
+  - Relacionamentos bem definidos com chaves estrangeiras
+  - Migrations automáticas para versionamento do schema
+  - Support para transações ACID
 
 - **Autenticação Segura**
   - JWT (Access Token + Refresh Token)
@@ -46,9 +52,9 @@ Backend para o sistema de Agendamento de Quadras, implementado com arquitetura l
   - RBAC (implementado)
   - Reservas (estrutura preparada)
   - Pagamentos (estrutura preparada)
-  - Painel Analitico (estrutura preparada)
+  - Painel Analítico (estrutura preparada)
   - Financeiro (estrutura preparada)
-  - Lojas (estrutura preparada)
+  - Quadras (estrutura preparada)
 
 - **Confiabilidade**
   - Testes automatizados
@@ -77,9 +83,9 @@ Backend para o sistema de Agendamento de Quadras, implementado com arquitetura l
       /repositories
       /use-cases
       /services
-    /products             # (Futuro domínio)
-    /orders               # (Futuro domínio)
-    /delivery             # (Futuro domínio)
+    /quadras              # (Futuro domínio)
+    /reservas             # (Futuro domínio)
+    /pagamentos           # (Futuro domínio)
   
   /application            # Orquestração entre domínios
     /services             # Serviços que coordenam múltiplos domínios
@@ -89,9 +95,11 @@ Backend para o sistema de Agendamento de Quadras, implementado com arquitetura l
   
   /infrastructure         # Detalhes técnicos e implementações
     /database             # Implementação do acesso a dados
-      /mongodb            # Implementação específica para MongoDB
-        /models           # Modelos Mongoose
+      /mysql              # Implementação específica para MySQL
+        /models           # Modelos Sequelize
         /repositories     # Implementações concretas dos repositórios
+        /migrations       # Scripts de migração do banco
+        /seeders          # Scripts de população inicial
     /external             # Serviços externos
       /mail               # Serviço de e-mail
       /oauth              # Serviços OAuth (Google, etc.)
@@ -125,7 +133,7 @@ Backend para o sistema de Agendamento de Quadras, implementado com arquitetura l
 ## Requisitos
 
 - Node.js 16+
-- MongoDB 4.4+
+- MySQL 8.0+
 - NPM ou Yarn
 
 ## Instalação
@@ -134,8 +142,8 @@ Backend para o sistema de Agendamento de Quadras, implementado com arquitetura l
 
 ```bash
 # Clonar o repositório
-git clone https://github.com/seu-usuario/quadras-online-api.git
-cd quadras-online-api
+git clone https://github.com/seu-usuario/agendamento-quadras-api.git
+cd agendamento-quadras-api
 
 # Configurar variáveis de ambiente
 cp .env.example .env
@@ -148,8 +156,8 @@ npm run docker:dev
 
 ```bash
 # Clonar o repositório
-git clone https://github.com/seu-usuario/quadras-online-api.git
-cd quadras-online-api
+git clone https://github.com/seu-usuario/agendamento-quadras-api.git
+cd agendamento-quadras-api
 
 # Instalar dependências
 npm install
@@ -157,11 +165,50 @@ npm install
 # Configurar variáveis de ambiente
 cp .env.example .env
 
+# Criar e migrar banco de dados
+npm run db:create
+npm run db:migrate
+
+# Executar seed dos dados iniciais
+npm run seed
+
 # Iniciar em desenvolvimento
 npm run dev
 
 # Iniciar em produção
 npm start
+```
+
+## Configuração do Banco de Dados
+
+### MySQL Local
+
+1. Instale o MySQL 8.0+
+2. Crie um banco de dados:
+```sql
+CREATE DATABASE quadras_online;
+CREATE USER 'quadras_user'@'localhost' IDENTIFIED BY 'quadras_pass';
+GRANT ALL PRIVILEGES ON quadras_online.* TO 'quadras_user'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+3. Configure as variáveis de ambiente no arquivo `.env`:
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=quadras_user
+DB_PASS=quadras_pass
+DB_NAME=quadras_online
+```
+
+### Migrações
+
+```bash
+# Executar migrações
+node scripts/migrate-mysql.js
+
+# Ou usando Sequelize CLI
+npx sequelize-cli db:migrate
 ```
 
 ## Inicialização do Sistema RBAC
@@ -182,12 +229,13 @@ Isso criará:
 - Recursos do sistema (rotas da API, menus, etc.)
 - Atribuirá permissões aos papéis
 - Atualizará usuários existentes para o novo modelo RBAC
+- Criará usuário admin padrão (admin@quadras.com / admin@123)
 
 ## Variáveis de Ambiente
 
 Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis:
 
-```
+```env
 # Ambiente
 NODE_ENV=development
 PORT=3000
@@ -199,12 +247,12 @@ JWT_SECRET=seu_jwt_secret_seguro
 JWT_EXPIRES_IN=1h
 JWT_REFRESH_EXPIRES_IN=7d
 
-# MongoDB
-MONGODB_CLUSTER=seu_cluster_mongodb
-DB_USER=seu_usuario_db
-DB_PASS=sua_senha_db
+# MySQL
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=quadras_user
+DB_PASS=quadras_pass
 DB_NAME=quadras_online
-MONGODB_APP=quadras_online
 
 # Email
 EMAIL_HOST=smtp.example.com
@@ -312,15 +360,32 @@ npm run docker:dev
 npm run docker:build
 ```
 
+## Comandos do Banco de Dados
+
+```bash
+# Criar banco de dados
+npm run db:create
+
+# Executar migrações
+npm run db:migrate
+
+# Executar seeds
+npm run db:seed
+
+# Reset completo do banco (cuidado!)
+npm run db:reset
+```
+
 ## Adicionando Novos Domínios
 
-Para adicionar um novo domínio funcional (como produtos, pedidos, etc.):
+Para adicionar um novo domínio funcional (como quadras, reservas, etc.):
 
 1. Crie a estrutura de pastas para o domínio em `/src/domain/[nome-do-domínio]/`
 2. Defina entidades na pasta `entities` e interfaces de repositório em `repositories`
 3. Implemente casos de uso específicos em `use-cases`
-4. Crie implementações do repositório em `/src/infrastructure/database/mongodb/repositories/`
-5. Desenvolva controllers, validadores e rotas para a API
+4. Crie modelos Sequelize em `/src/infrastructure/database/mysql/models/`
+5. Implemente repositórios em `/src/infrastructure/database/mysql/repositories/`
+6. Desenvolva controllers, validadores e rotas para a API
 
 ## Fluxo Completo de Aplicação
 
@@ -341,25 +406,25 @@ Para verificar permissões nos seus controllers e rotas:
 ```javascript
 // Verificar uma permissão específica
 router.get(
-  '/products',
-  requirePermission('PRODUCT_VIEW'),
-  asyncHandler(productController.getAllProducts)
+  '/quadras',
+  requirePermission('QUADRA_VIEW'),
+  asyncHandler(quadraController.getAllQuadras)
 );
 
 // Verificar uma permissão para um recurso específico
 router.put(
-  '/products/:id',
-  requirePermission('PRODUCT_EDIT', {
-    resourcePath: '/api/products/:id'
+  '/quadras/:id',
+  requirePermission('QUADRA_EDIT', {
+    resourcePath: '/api/quadras/:id'
   }),
-  asyncHandler(productController.updateProduct)
+  asyncHandler(quadraController.updateQuadra)
 );
 
 // Verificar se o usuário tem um papel específico
 router.post(
-  '/orders/:id/payment',
+  '/reservas/:id/payment',
   hasRole('gerente'),
-  asyncHandler(orderController.processPayment)
+  asyncHandler(reservaController.processPayment)
 );
 
 // Verificar se o usuário tem um papel com escopo específico
@@ -368,6 +433,38 @@ router.get(
   hasScopedRole('gerente', 'store', req => req.params.storeId),
   asyncHandler(reportController.getStoreReports)
 );
+```
+
+## Migração de MongoDB para MySQL
+
+Este projeto foi migrado de MongoDB para MySQL mantendo:
+
+- **Mesma arquitetura de domínio**: Entidades e casos de uso não foram alterados
+- **Interfaces de repositório preservadas**: Apenas as implementações mudaram
+- **Funcionalidades RBAC completas**: Sistema de papéis e permissões migrado
+- **Relacionamentos adequados**: Chaves estrangeiras e integridade referencial
+- **Performance otimizada**: Índices apropriados para consultas frequentes
+
+## Administração do Banco
+
+### Usando Adminer (incluído no Docker)
+
+Acesse http://localhost:8080 quando usar `docker-compose`
+
+- **Sistema**: MySQL
+- **Servidor**: mysql
+- **Usuário**: quadras_user
+- **Senha**: quadras_pass
+- **Base de dados**: quadras_online
+
+### Backup e Restore
+
+```bash
+# Backup
+mysqldump -u quadras_user -p quadras_online > backup.sql
+
+# Restore
+mysql -u quadras_user -p quadras_online < backup.sql
 ```
 
 ## Contribuição

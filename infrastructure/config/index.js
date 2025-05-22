@@ -26,8 +26,8 @@ const requiredEnvVars = [
 const dbEnvVars = [
   'DB_USER',
   'DB_PASS',
-  'MONGODB_CLUSTER',
-  'MONGODB_APP'
+  'DB_HOST',
+  'DB_PORT'
 ];
 
 // Verificar variáveis obrigatórias
@@ -50,16 +50,36 @@ for (const envVar of dbEnvVars) {
   }
 }
 
-// Valores padrão para ambiente de desenvolvimento
-const getMongoURI = () => {
-  // Se estamos em desenvolvimento e faltam credenciais, usamos uma conexão local
-  if (process.env.NODE_ENV !== 'production' ) {
-    logger.info('Usando conexão MongoDB local para ambiente de desenvolvimento');
-    return `mongodb://localhost:27017/${process.env.DB_NAME}`;
-  }
-  
-  // Caso contrário, usamos a conexão Atlas com credenciais
-  return `mongodb+srv://${encodeURIComponent(process.env.DB_USER)}:${encodeURIComponent(process.env.DB_PASS)}@${process.env.MONGODB_CLUSTER}/${process.env.DB_NAME}?retryWrites=true&w=majority${process.env.MONGODB_APP ? `&appName=${process.env.MONGODB_APP}` : ''}`;
+// Configuração da conexão MySQL
+const getMySQLConfig = () => {
+  return {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 3306,
+    database: process.env.DB_NAME || 'quadras_online',
+    username: process.env.DB_USER || 'root',
+    password: process.env.DB_PASS || '',
+    dialect: 'mysql',
+    dialectOptions: {
+      connectTimeout: 60000 // 60 segundos
+    },
+    pool: {
+      max: 10, // máximo de conexões
+      min: 0, // mínimo de conexões
+      acquire: 30000, // tempo máximo em ms para adquirir uma conexão
+      idle: 10000 // tempo máximo em ms que uma conexão pode estar ociosa
+    },
+    define: {
+      underscored: true, // transforma camelCase em snake_case
+      timestamps: true, // timestamps automáticos
+      paranoid: true, // soft delete
+      freezeTableName: false, // pluralizar nomes de tabelas
+      charset: 'utf8mb4',
+      collate: 'utf8mb4_unicode_ci',
+      engine: 'InnoDB'
+    },
+    logging: process.env.NODE_ENV === 'development' ? 
+      (msg) => logger.debug(msg) : false
+  };
 };
 
 // Configurações organizadas por contexto
@@ -73,10 +93,7 @@ module.exports = {
   },
 
   db: {
-    uri: getMongoURI(),
-    options: {
-      // Opções de conexão podem ser definidas aqui se necessário
-    }
+    mysql: getMySQLConfig()
   },
 
   auth: {
@@ -116,7 +133,7 @@ module.exports = {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     },
-    from: `"Mercearia Digital" <${process.env.EMAIL_USER}>`
+    from: `"Agendamento de Quadras" <${process.env.EMAIL_USER}>`
   },
 
   security: {
