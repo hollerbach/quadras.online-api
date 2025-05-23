@@ -1,15 +1,14 @@
 // src/infrastructure/monitoring/health-monitor.js
-const mongoose = require('mongoose');
+const { getConnection } = require('../database/mysql/connection');
 const os = require('os');
 const logger = require('../logging/logger');
-const { getConnection } = require('../database/mongodb/connection');
 const mailService = require('../external/mail.service');
 
 /**
- * Monitor de saúde da aplicação
- * Verifica o estado dos componentes e serviços principais
+ * Monitor de saúde da aplicação para MySQL
+ * Substitui o health-monitor.js que usava MongoDB
  */
-class HealthMonitor {
+class MySQLHealthMonitor {
   /**
    * Verifica o estado geral da aplicação
    * @returns {Object} Estado de saúde da aplicação e seus componentes
@@ -55,43 +54,56 @@ class HealthMonitor {
   }
   
   /**
-   * Verifica o estado da conexão com o banco de dados
-   * @returns {Object} Estado da conexão com o MongoDB
+   * Verifica o estado da conexão com o banco de dados MySQL
+   * @returns {Object} Estado da conexão com o MySQL
    */
   async checkDatabase() {
     try {
-      const connection = getConnection() || mongoose.connection;
-      const dbState = connection.readyState;
+      const sequelize = getConnection();
       
-      // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
-      const stateMap = ['disconnected', 'connected', 'connecting', 'disconnecting'];
-      
-      // Verificar se a conexão está respondendo com uma operação simples
+      if (!sequelize) {
+        return {
+          status: 'DOWN',
+          error: 'Nenhuma conexão disponível'
+        };
+      }
+
+      // Verificar se a conexão está ativa
+      let connectionStatus = 'disconnected';
       let pingResult = null;
       
-      if (dbState === 1) {
-        try {
-          const startTime = process.hrtime();
-          await connection.db.admin().ping();
-          const endTime = process.hrtime(startTime);
-          pingResult = Math.round((endTime[0] * 1000) + (endTime[1] / 1000000));
-        } catch (error) {
-          logger.error(`Erro ao fazer ping no MongoDB: ${error.message}`);
-        }
+      try {
+        // Testar conexão
+        await sequelize.authenticate();
+        connectionStatus = 'connected';
+        
+        // Fazer ping no banco
+        const startTime = process.hrtime();
+        await sequelize.query('SELECT 1 as ping');
+        const endTime = process.hrtime(startTime);
+        pingResult = Math.round((endTime[0] * 1000) + (endTime[1] / 1000000));
+        
+      } catch (error) {
+        logger.error(`Erro ao verificar conexão MySQL: ${error.message}`);
+        return {
+          status: 'DOWN',
+          error: error.message
+        };
       }
       
       return {
-        status: dbState === 1 ? 'UP' : 'DOWN',
+        status: connectionStatus === 'connected' ? 'UP' : 'DOWN',
         details: {
-          state: dbState,
-          stateDesc: stateMap[dbState] || 'unknown',
+          state: connectionStatus,
           pingTime: pingResult ? `${pingResult}ms` : null,
-          host: connection.host,
-          name: connection.name
+          dialect: sequelize.getDialect(),
+          database: sequelize.getDatabaseName(),
+          host: sequelize.config.host,
+          port: sequelize.config.port
         }
       };
     } catch (error) {
-      logger.error(`Erro ao verificar conexão com MongoDB: ${error.message}`);
+      logger.error(`Erro ao verificar conexão com MySQL: ${error.message}`);
       return {
         status: 'DOWN',
         error: error.message
@@ -210,4 +222,4 @@ class HealthMonitor {
   }
 }
 
-module.exports = new HealthMonitor();
+module.exports = new MySQLHealthMonitor();

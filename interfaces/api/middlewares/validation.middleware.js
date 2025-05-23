@@ -3,7 +3,8 @@ const { validationResult, param, query, body } = require('express-validator');
 const { BadRequestError } = require('../../../shared/errors/api-error');
 const logger = require('../../../infrastructure/logging/logger');
 const xss = require('xss');
-const mongoSanitize = require('mongo-sanitize');
+const validator = require('validator');
+const mysql = require('mysql2');
 
 /**
  * Configurações para validações globais
@@ -47,7 +48,6 @@ const validationConfig = {
     phone: {
       maxLength: 20
     },
-    // Limites para upload de arquivos são definidos no middleware de upload
   },
   
   // Caracteres permitidos para diferentes tipos de campos
@@ -56,7 +56,6 @@ const validationConfig = {
     alphaNumericWithSpaces: /^[a-zA-Z0-9 ]+$/,
     username: /^[a-zA-Z0-9_.\-@]+$/,
     name: /^[a-zA-Z0-9\s.\-']+$/,
-    objectId: /^[0-9a-fA-F]{24}$/,
     uuid: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
     phone: /^\+?[0-9\s\-()]+$/,
     zip: /^[0-9\-]+$/,
@@ -65,6 +64,54 @@ const validationConfig = {
     locale: /^[a-z]{2}(-[A-Z]{2})?$/,
     twoFactorCode: /^\d{6}$/
   }
+};
+
+/**
+ * Sanitiza dados para prevenir SQL injection (substitui mongo-sanitize)
+ * @param {any} data Dados a serem sanitizados
+ * @returns {any} Dados sanitizados
+ */
+const sanitizeForSQL = (data) => {
+  if (typeof data === 'string') {
+    // Usar escape do mysql2 para prevenir SQL injection
+    // Remove aspas adicionadas pelo escape() e aplica escape básico
+    return mysql.escape(data).slice(1, -1);
+  } else if (Array.isArray(data)) {
+    return data.map(sanitizeForSQL);
+  } else if (data !== null && typeof data === 'object') {
+    const result = {};
+    for (const [key, value] of Object.entries(data)) {
+      // Sanitizar também as chaves do objeto
+      const sanitizedKey = validator.escape(key);
+      result[sanitizedKey] = sanitizeForSQL(value);
+    }
+    return result;
+  }
+  return data;
+};
+
+/**
+ * Sanitiza dados para prevenir XSS
+ * @param {any} data Dados a serem sanitizados
+ * @returns {any} Dados sanitizados
+ */
+const sanitizeXss = (data) => {
+  if (typeof data === 'string') {
+    return xss(data, {
+      whiteList: {}, // Não permitir nenhuma tag HTML
+      stripIgnoreTag: true,
+      stripIgnoreTagBody: ['script'] // Remover completamente scripts
+    });
+  } else if (Array.isArray(data)) {
+    return data.map(sanitizeXss);
+  } else if (data !== null && typeof data === 'object') {
+    const result = {};
+    for (const [key, value] of Object.entries(data)) {
+      result[key] = sanitizeXss(value);
+    }
+    return result;
+  }
+  return data;
 };
 
 /**
@@ -105,30 +152,6 @@ const validate = (req, res, next) => {
 };
 
 /**
- * Sanitiza dados para prevenir XSS
- * @param {any} data Dados a serem sanitizados
- * @returns {any} Dados sanitizados
- */
-const sanitizeXss = (data) => {
-  if (typeof data === 'string') {
-    return xss(data, {
-      whiteList: {}, // Não permitir nenhuma tag HTML
-      stripIgnoreTag: true,
-      stripIgnoreTagBody: ['script'] // Remover completamente scripts
-    });
-  } else if (Array.isArray(data)) {
-    return data.map(sanitizeXss);
-  } else if (data !== null && typeof data === 'object') {
-    const result = {};
-    for (const [key, value] of Object.entries(data)) {
-      result[key] = sanitizeXss(value);
-    }
-    return result;
-  }
-  return data;
-};
-
-/**
  * Middleware para sanitizar todos os dados de entrada
  * @returns {Function} Middleware para sanitização
  */
@@ -139,20 +162,20 @@ const sanitizeInputs = () => {
       // Aplicar sanitização de XSS
       req.body = sanitizeXss(req.body);
       
-      // Aplicar sanitização de MongoDB
-      req.body = mongoSanitize(req.body);
+      // Aplicar sanitização de SQL injection (substitui mongoSanitize)
+      req.body = sanitizeForSQL(req.body);
     }
     
     // Sanitizar parâmetros da URL
     if (req.params) {
       req.params = sanitizeXss(req.params);
-      req.params = mongoSanitize(req.params);
+      req.params = sanitizeForSQL(req.params);
     }
     
     // Sanitizar query strings
     if (req.query) {
       req.query = sanitizeXss(req.query);
-      req.query = mongoSanitize(req.query);
+      req.query = sanitizeForSQL(req.query);
     }
     
     next();
@@ -224,11 +247,11 @@ const validators = {
   // Validação de campos de identidade
   id: () => param('id')
     .isUUID().withMessage('ID inválido')
-    .customSanitizer(value => mongoSanitize(value)),
+    .customSanitizer(value => sanitizeForSQL(value)),
     
   uuid: () => param('uuid')
     .matches(validationConfig.patterns.uuid).withMessage('UUID inválido')
-    .customSanitizer(value => mongoSanitize(value)),
+    .customSanitizer(value => sanitizeForSQL(value)),
   
   // Validação de campos de usuário
   email: () => body('email')
@@ -335,7 +358,7 @@ const validators = {
       field.custom(options.customValidation);
     }
     
-    // Sempre sanitizar entrada
+    // Sempre sanitizar entrada para SQL e XSS
     field.customSanitizer(value => {
       let sanitized = value;
       
@@ -344,8 +367,8 @@ const validators = {
         sanitized = xss(sanitized);
       }
       
-      // Sanitizar contra MongoDB injection
-      sanitized = mongoSanitize(sanitized);
+      // Sanitizar contra SQL injection
+      sanitized = sanitizeForSQL(sanitized);
       
       return sanitized;
     });
@@ -369,5 +392,7 @@ module.exports = {
   limitPayloadSize,
   validators,
   createValidator,
-  validationConfig
+  validationConfig,
+  sanitizeForSQL, // Exportar função de sanitização SQL
+  sanitizeXss    // Exportar função de sanitização XSS
 };
