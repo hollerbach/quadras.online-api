@@ -1,6 +1,6 @@
 // src/interfaces/api/controllers/auth.controller.js
 const AuthUseCaseFactory = require('../../../domain/auth/factories/auth-use-case.factory');
-const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
+const userRepository = require('../../../infrastructure/database/mysql/repositories/user.repository');
 const authService = require('../../../infrastructure/security/auth.service');
 const tokenService = require('../../../infrastructure/security/token.service');
 const twoFactorService = require('../../../infrastructure/security/two-factor.service');

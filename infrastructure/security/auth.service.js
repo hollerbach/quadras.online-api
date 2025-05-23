@@ -379,8 +379,8 @@ class AuthService {
 }
 
 // Exportar uma instância singleton com injeção de dependências
-const userRepository = require('../database/mongodb/repositories/user.repository');
-const rbacRepository = require('../database/mongodb/repositories/rbac.repository');
+const userRepository = require('../database/mysql/repositories/user.repository');
+const rbacRepository = require('../database/mysql/repositories/rbac.repository');
 
 // Auditoria (opcional)
 let auditService;

@@ -298,5 +298,5 @@ class TokenService {
 }
 
 // Inicializar com as dependências
-const authRepository = require('../database/mongodb/repositories/auth.repository');
+const authRepository = require('../database/mysql/repositories/auth.repository');
 module.exports = new TokenService(authRepository);

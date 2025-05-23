@@ -36,7 +36,7 @@ const validationConfig = {
       maxLength: 5000
     },
     id: {
-      length: 24 // MongoDB ObjectId padrão
+      length: 36 // UUID padrão tem 36 caracteres
     },
     token: {
       maxLength: 1024
@@ -223,7 +223,7 @@ const limitPayloadSize = () => {
 const validators = {
   // Validação de campos de identidade
   id: () => param('id')
-    .isMongoId().withMessage('ID inválido')
+    .isUUID().withMessage('ID inválido')
     .customSanitizer(value => mongoSanitize(value)),
     
   uuid: () => param('uuid')

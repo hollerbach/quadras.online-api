@@ -1,4 +1,4 @@
-// src/infrastructure/database/mysql/models/index.js
+// src/infrastructure/database/mysql/models/index.js - VERSÃO COMPLETA
 const { Sequelize, DataTypes } = require('sequelize');
 const { getConnection } = require('../connection');
 const config = require('../../../config');
@@ -6,10 +6,8 @@ const logger = require('../../../logging/logger');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
-// Obter a instância do Sequelize
 const sequelize = getConnection();
 
-// Definir os modelos
 const defineModels = () => {
   if (!sequelize) {
     throw new Error('Conexão com banco de dados não estabelecida');
@@ -104,7 +102,7 @@ const defineModels = () => {
     tableName: 'users',
     timestamps: true,
     underscored: true,
-    paranoid: true, // soft delete
+    paranoid: true,
     hooks: {
       beforeCreate: async (user) => {
         if (user.password && !user.password.startsWith('$2')) {
@@ -118,6 +116,37 @@ const defineModels = () => {
       }
     }
   });
+
+  // Adicionar métodos de instância para User
+  User.prototype.isLocked = function() {
+    return !!(this.lockUntil && this.lockUntil > new Date());
+  };
+
+  User.prototype.incrementLoginAttempts = async function() {
+    if (this.lockUntil && this.lockUntil < new Date()) {
+      this.failedLoginAttempts = 1;
+      this.lockUntil = null;
+    } else {
+      this.failedLoginAttempts += 1;
+      
+      if (this.failedLoginAttempts >= 5 && !this.isLocked()) {
+        this.lockUntil = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+      }
+    }
+    
+    await this.save();
+  };
+
+  User.prototype.resetLoginAttempts = async function() {
+    this.failedLoginAttempts = 0;
+    this.lockUntil = null;
+    this.lastLogin = new Date();
+    await this.save();
+  };
+
+  User.prototype.comparePassword = async function(candidatePassword) {
+    return await bcrypt.compare(candidatePassword, this.password);
+  };
 
   // Modelo UserRecoveryCode
   const UserRecoveryCode = sequelize.define('UserRecoveryCode', {
@@ -298,7 +327,7 @@ const defineModels = () => {
     paranoid: false
   });
 
-  // Modelo RolePermission (Relacionamento entre Role e Permission)
+  // Modelo RolePermission
   const RolePermission = sequelize.define('RolePermission', {
     id: {
       type: DataTypes.UUID,
@@ -338,7 +367,7 @@ const defineModels = () => {
     ]
   });
 
-  // Modelo RolePermissionResource (Relacionamento entre RolePermission e Resource)
+  // Modelo RolePermissionResource
   const RolePermissionResource = sequelize.define('RolePermissionResource', {
     id: {
       type: DataTypes.UUID,
@@ -368,3 +397,462 @@ const defineModels = () => {
       type: DataTypes.JSON,
       allowNull: true
     }
+  }, {
+    tableName: 'role_permission_resources',
+    timestamps: true,
+    underscored: true,
+    paranoid: false,
+    updatedAt: false,
+    indexes: [
+      {
+        unique: true,
+        fields: ['role_permission_id', 'resource_id']
+      }
+    ]
+  });
+
+  // Modelo UserRole
+  const UserRole = sequelize.define('UserRole', {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: () => uuidv4(),
+      primaryKey: true,
+      allowNull: false
+    },
+    userId: {
+      type: DataTypes.UUID,
+      field: 'user_id',
+      allowNull: false,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    roleId: {
+      type: DataTypes.UUID,
+      field: 'role_id',
+      allowNull: false,
+      references: {
+        model: 'roles',
+        key: 'id'
+      }
+    },
+    assignedAt: {
+      type: DataTypes.DATE,
+      field: 'assigned_at',
+      defaultValue: DataTypes.NOW
+    },
+    assignedBy: {
+      type: DataTypes.UUID,
+      field: 'assigned_by',
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    scope: {
+      type: DataTypes.ENUM('global', 'store', 'department'),
+      defaultValue: 'global'
+    },
+    scopeId: {
+      type: DataTypes.UUID,
+      field: 'scope_id',
+      allowNull: true
+    }
+  }, {
+    tableName: 'user_roles',
+    timestamps: false,
+    underscored: true,
+    paranoid: false,
+    indexes: [
+      {
+        unique: true,
+        fields: ['user_id', 'role_id', 'scope', 'scope_id']
+      }
+    ]
+  });
+
+  // Modelo RefreshToken
+  const RefreshToken = sequelize.define('RefreshToken', {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: () => uuidv4(),
+      primaryKey: true,
+      allowNull: false
+    },
+    token: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      unique: true
+    },
+    userId: {
+      type: DataTypes.UUID,
+      field: 'user_id',
+      allowNull: false,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    userEmail: {
+      type: DataTypes.STRING(255),
+      field: 'user_email',
+      allowNull: false
+    },
+    expires: {
+      type: DataTypes.DATE,
+      allowNull: false
+    },
+    revoked: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      field: 'created_at',
+      defaultValue: DataTypes.NOW
+    },
+    createdByIp: {
+      type: DataTypes.STRING(50),
+      field: 'created_by_ip',
+      allowNull: true
+    },
+    revokedAt: {
+      type: DataTypes.DATE,
+      field: 'revoked_at',
+      allowNull: true
+    },
+    revokedByIp: {
+      type: DataTypes.STRING(50),
+      field: 'revoked_by_ip',
+      allowNull: true
+    },
+    replacedByToken: {
+      type: DataTypes.STRING(255),
+      field: 'replaced_by_token',
+      allowNull: true
+    }
+  }, {
+    tableName: 'refresh_tokens',
+    timestamps: false,
+    underscored: true,
+    paranoid: false,
+    indexes: [
+      {
+        fields: ['token']
+      },
+      {
+        fields: ['user_id']
+      },
+      {
+        fields: ['expires']
+      }
+    ]
+  });
+
+  // Modelo TokenBlacklist
+  const TokenBlacklist = sequelize.define('TokenBlacklist', {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: () => uuidv4(),
+      primaryKey: true,
+      allowNull: false
+    },
+    token: {
+      type: DataTypes.STRING(255),
+      allowNull: false
+    },
+    type: {
+      type: DataTypes.ENUM('access', 'refresh'),
+      allowNull: false
+    },
+    expires: {
+      type: DataTypes.DATE,
+      allowNull: false
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      field: 'created_at',
+      defaultValue: DataTypes.NOW
+    }
+  }, {
+    tableName: 'token_blacklist',
+    timestamps: false,
+    underscored: true,
+    paranoid: false,
+    indexes: [
+      {
+        fields: ['token']
+      },
+      {
+        fields: ['expires']
+      }
+    ]
+  });
+
+  // Modelo AuditLog (opcional)
+  const AuditLog = sequelize.define('AuditLog', {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: () => uuidv4(),
+      primaryKey: true,
+      allowNull: false
+    },
+    action: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    userId: {
+      type: DataTypes.UUID,
+      field: 'user_id',
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    userEmail: {
+      type: DataTypes.STRING(255),
+      field: 'user_email',
+      allowNull: true
+    },
+    ipAddress: {
+      type: DataTypes.STRING(50),
+      field: 'ip_address',
+      allowNull: true
+    },
+    details: {
+      type: DataTypes.JSON,
+      allowNull: true
+    },
+    timestamp: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW
+    }
+  }, {
+    tableName: 'audit_logs',
+    timestamps: false,
+    underscored: true,
+    paranoid: false,
+    indexes: [
+      {
+        fields: ['action']
+      },
+      {
+        fields: ['user_id']
+      },
+      {
+        fields: ['timestamp']
+      }
+    ]
+  });
+
+  // Modelo LoginAttempt
+  const LoginAttempt = sequelize.define('LoginAttempt', {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: () => uuidv4(),
+      primaryKey: true,
+      allowNull: false
+    },
+    userId: {
+      type: DataTypes.UUID,
+      field: 'user_id',
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    email: {
+      type: DataTypes.STRING(255),
+      allowNull: false
+    },
+    success: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    ipAddress: {
+      type: DataTypes.STRING(50),
+      field: 'ip_address',
+      allowNull: true
+    },
+    details: {
+      type: DataTypes.JSON,
+      allowNull: true
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      field: 'created_at',
+      defaultValue: DataTypes.NOW
+    }
+  }, {
+    tableName: 'login_attempts',
+    timestamps: false,
+    underscored: true,
+    paranoid: false,
+    indexes: [
+      {
+        fields: ['user_id']
+      },
+      {
+        fields: ['email']
+      },
+      {
+        fields: ['ip_address']
+      },
+      {
+        fields: ['created_at']
+      }
+    ]
+  });
+
+  // ===========================
+  // DEFINIR RELACIONAMENTOS
+  // ===========================
+
+  // User relacionamentos
+  User.hasMany(UserRecoveryCode, { 
+    foreignKey: 'userId', 
+    as: 'recoveryCodes',
+    onDelete: 'CASCADE'
+  });
+  UserRecoveryCode.belongsTo(User, { 
+    foreignKey: 'userId',
+    as: 'user'
+  });
+
+  User.hasMany(UserOAuth, { 
+    foreignKey: 'userId', 
+    as: 'oauthAccounts',
+    onDelete: 'CASCADE'
+  });
+  UserOAuth.belongsTo(User, { 
+    foreignKey: 'userId',
+    as: 'user'
+  });
+
+  User.hasMany(UserRole, { 
+    foreignKey: 'userId', 
+    as: 'roles',
+    onDelete: 'CASCADE'
+  });
+  UserRole.belongsTo(User, { 
+    foreignKey: 'userId',
+    as: 'user'
+  });
+
+  User.hasMany(RefreshToken, { 
+    foreignKey: 'userId', 
+    as: 'refreshTokens',
+    onDelete: 'CASCADE'
+  });
+  RefreshToken.belongsTo(User, { 
+    foreignKey: 'userId',
+    as: 'user'
+  });
+
+  User.hasMany(AuditLog, { 
+    foreignKey: 'userId', 
+    as: 'auditLogs',
+    onDelete: 'SET NULL'
+  });
+  AuditLog.belongsTo(User, { 
+    foreignKey: 'userId',
+    as: 'user'
+  });
+
+  User.hasMany(LoginAttempt, { 
+    foreignKey: 'userId', 
+    as: 'loginAttempts',
+    onDelete: 'SET NULL'
+  });
+  LoginAttempt.belongsTo(User, { 
+    foreignKey: 'userId',
+    as: 'user'
+  });
+
+  // Role relacionamentos
+  Role.hasMany(RolePermission, { 
+    foreignKey: 'roleId', 
+    as: 'rolePermissions',
+    onDelete: 'CASCADE'
+  });
+  RolePermission.belongsTo(Role, { 
+    foreignKey: 'roleId',
+    as: 'role'
+  });
+
+  Role.hasMany(UserRole, { 
+    foreignKey: 'roleId', 
+    as: 'userRoles',
+    onDelete: 'CASCADE'
+  });
+  UserRole.belongsTo(Role, { 
+    foreignKey: 'roleId',
+    as: 'role'
+  });
+
+  // Permission relacionamentos
+  Permission.hasMany(RolePermission, { 
+    foreignKey: 'permissionId', 
+    as: 'rolePermissions',
+    onDelete: 'CASCADE'
+  });
+  RolePermission.belongsTo(Permission, { 
+    foreignKey: 'permissionId',
+    as: 'permission'
+  });
+
+  // Resource relacionamentos
+  Resource.hasMany(RolePermissionResource, { 
+    foreignKey: 'resourceId', 
+    as: 'rolePermissionResources',
+    onDelete: 'CASCADE'
+  });
+  RolePermissionResource.belongsTo(Resource, { 
+    foreignKey: 'resourceId',
+    as: 'resource'
+  });
+
+  // RolePermission relacionamentos
+  RolePermission.hasMany(RolePermissionResource, { 
+    foreignKey: 'rolePermissionId', 
+    as: 'resources',
+    onDelete: 'CASCADE'
+  });
+  RolePermissionResource.belongsTo(RolePermission, { 
+    foreignKey: 'rolePermissionId',
+    as: 'rolePermission'
+  });
+
+  // UserRole relacionamentos para assignedBy
+  User.hasMany(UserRole, { 
+    foreignKey: 'assignedBy', 
+    as: 'assignedRoles',
+    onDelete: 'SET NULL'
+  });
+  UserRole.belongsTo(User, { 
+    foreignKey: 'assignedBy',
+    as: 'assignedByUser'
+  });
+
+  return {
+    User,
+    UserRecoveryCode,
+    UserOAuth,
+    Permission,
+    Resource,
+    Role,
+    RolePermission,
+    RolePermissionResource,
+    UserRole,
+    RefreshToken,
+    TokenBlacklist,
+    AuditLog,
+    LoginAttempt
+  };
+};
+
+module.exports = defineModels;

@@ -11,8 +11,8 @@ const Disable2FAUseCase = require('../use-cases/disable-2fa.use-case');
 const LoginUseCase = require('../use-cases/login.use-case');
 
 // Repositórios
-const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
-const authRepository = require('../../../infrastructure/database/mongodb/repositories/auth.repository');
+const userRepository = require('../../../infrastructure/database/mysql/repositories/user.repository');
+const authRepository = require('../../../infrastructure/database/mysql/repositories/auth.repository');
 
 // Serviços centralizados
 const authService = require('../../../infrastructure/security/auth.service');

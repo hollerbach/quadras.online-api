@@ -1,6 +1,6 @@
 // src/infrastructure/utils/graceful-shutdown.js
 const logger = require('../logging/logger');
-const { closeConnection } = require('../database/mongodb/connection');
+const { closeConnection } = require('../database/mysql/connection');
 
 /**
  * Gerencia o desligamento gracioso da aplicação

@@ -29,7 +29,7 @@ const rbacValidationSchemas = {
 
   updateRole: [
     param('id')
-      .isMongoId().withMessage('ID do papel inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     body('name')
       .optional()
@@ -79,12 +79,12 @@ const rbacValidationSchemas = {
 
   getRoleById: [
     param('id')
-      .isMongoId().withMessage('ID do papel inválido')
+      .isUUID().withMessage('ID do papel inválido')
   ],
 
   deleteRole: [
     param('id')
-      .isMongoId().withMessage('ID do papel inválido')
+      .isUUID().withMessage('ID do papel inválido')
   ],
 
   // Validações para permissões
@@ -116,7 +116,7 @@ const rbacValidationSchemas = {
 
   updatePermission: [
     param('id')
-      .isMongoId().withMessage('ID da permissão inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     body('name')
       .optional()
@@ -170,21 +170,21 @@ const rbacValidationSchemas = {
 
   getPermissionById: [
     param('id')
-      .isMongoId().withMessage('ID da permissão inválido')
+      .isUUID().withMessage('ID do papel inválido')
   ],
 
   deletePermission: [
     param('id')
-      .isMongoId().withMessage('ID da permissão inválido')
+      .isUUID().withMessage('ID do papel inválido')
   ],
 
   // Validações para relação entre papéis e permissões
   addPermissionToRole: [
     param('roleId')
-      .isMongoId().withMessage('ID do papel inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     param('permissionId')
-      .isMongoId().withMessage('ID da permissão inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     body('resources')
       .optional()
@@ -192,7 +192,7 @@ const rbacValidationSchemas = {
     
     body('resources.*.resource')
       .optional()
-      .isMongoId().withMessage('ID do recurso inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     body('resources.*.conditions')
       .optional()
@@ -201,19 +201,19 @@ const rbacValidationSchemas = {
 
   removePermissionFromRole: [
     param('roleId')
-      .isMongoId().withMessage('ID do papel inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     param('permissionId')
-      .isMongoId().withMessage('ID da permissão inválido')
+      .isUUID().withMessage('ID do papel inválido')
   ],
 
   // Validações para relação entre usuários e papéis
   assignRoleToUser: [
     param('userId')
-      .isMongoId().withMessage('ID do usuário inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     param('roleId')
-      .isMongoId().withMessage('ID do papel inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     body('scope')
       .optional()
@@ -229,8 +229,8 @@ const rbacValidationSchemas = {
         }
         
         if (value) {
-          // Verificar se é um MongoDB ObjectId válido
-          if (!/^[0-9a-fA-F]{24}$/.test(value)) {
+          // Verificar se é um UUID válido em vez de ObjectId
+          if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value)) {
             throw new Error('ID do escopo inválido');
           }
         }
@@ -241,10 +241,10 @@ const rbacValidationSchemas = {
 
   removeRoleFromUser: [
     param('userId')
-      .isMongoId().withMessage('ID do usuário inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     param('roleId')
-      .isMongoId().withMessage('ID do papel inválido'),
+      .isUUID().withMessage('ID do papel inválido'),
     
     body('scope')
       .optional()
@@ -253,12 +253,12 @@ const rbacValidationSchemas = {
     
     body('scopeId')
       .optional()
-      .isMongoId().withMessage('ID do escopo inválido')
+      .isUUID().withMessage('ID do papel inválido')
   ],
 
   getUserRoles: [
     param('userId')
-      .isMongoId().withMessage('ID do usuário inválido')
+      .isUUID().withMessage('ID do papel inválido')
   ]
 };
 

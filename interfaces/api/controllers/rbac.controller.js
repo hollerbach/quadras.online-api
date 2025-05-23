@@ -1,6 +1,6 @@
 // src/interfaces/api/controllers/rbac.controller.js
-const rbacRepository = require('../../../infrastructure/database/mongodb/repositories/rbac.repository');
-const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
+const rbacRepository = require('../../../infrastructure/database/mysql/repositories/rbac.repository');
+const userRepository = require('../../../infrastructure/database/mysql/repositories/user.repository');
 const { CreateRoleUseCase, AssignRoleToUserUseCase, CreatePermissionUseCase, AddPermissionToRoleUseCase } = require('../../../domain/rbac/use-cases/rbac.use-cases');
 const logger = require('../../../infrastructure/logging/logger');
 

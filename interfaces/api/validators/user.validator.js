@@ -2,7 +2,7 @@
 const { body } = require('express-validator');
 const { validators, createValidator } = require('../middlewares/validation.middleware');
 const { BadRequestError } = require('../../../shared/errors/api-error');
-const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
+const userRepository = require('../../../infrastructure/database/mysql/repositories/user.repository');
 
 /**
  * Validações avançadas específicas do domínio
@@ -229,11 +229,11 @@ const userValidationSchemas = {
   ],
   
   getUserById: [
-    validators.id() // Validação de ID MongoDB
+    validators.id() // Validação de ID
   ],
   
   deactivateUser: [
-    validators.id(), // Validação de ID MongoDB
+    validators.id(), // Validação de ID
     
     // Impedir que usuário desative a própria conta
     body()

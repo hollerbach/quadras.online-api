@@ -1,6 +1,6 @@
 // src/interfaces/api/controllers/user.controller.js
 const { UserNotFoundError } = require('../../../shared/errors/api-error');
-const userRepository = require('../../../infrastructure/database/mongodb/repositories/user.repository');
+const userRepository = require('../../../infrastructure/database/mysql/repositories/user.repository');
 const logger = require('../../../infrastructure/logging/logger');
 
 /**

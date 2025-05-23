@@ -13,7 +13,7 @@ require('dotenv').config({
 
 // Importações principais
 const { app } = require('./app');
-const { connectToDatabase } = require('./infrastructure/database/mongodb/connection');
+const { connectToDatabase } = require('./infrastructure/database/mysql/connection');
 const logger = require('./infrastructure/logging/logger');
 const config = require('./infrastructure/config');
 const gracefulShutdown = require('./infrastructure/utils/graceful-shutdown');
@@ -44,7 +44,7 @@ const startServer = async () => {
   try {
     // Conectar ao banco de dados
     await connectToDatabase();
-    logger.info(`✅ Conectado ao MongoDB`);
+    logger.info(`✅ Conectado ao MySQL`);
 
     // Iniciar servidor HTTP
     const server = app.listen(config.app.port, () => {
