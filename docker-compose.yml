@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_ENV: development
-    container_name: agendamento-quadras-api
+    container_name: quadras-api
     restart: unless-stopped
     ports:
       - '3000:3000'
@@ -45,8 +45,8 @@ services:
     command: npm run dev
 
   mysql:
-    image: mysql:8.0
-    container_name: agendamento-quadras-mysql
+    image: mysql:latest
+    container_name: quadras-mysql
     restart: unless-stopped
     environment:
       - MYSQL_ROOT_PASSWORD=root_password
@@ -69,7 +69,7 @@ services:
 
   mailhog:
     image: mailhog/mailhog
-    container_name: agendamento-quadras-mailhog
+    container_name: quadras-mailhog
     restart: unless-stopped
     ports:
       - '1025:1025' # SMTP Server
@@ -79,7 +79,7 @@ services:
 
   adminer:
     image: adminer
-    container_name: agendamento-quadras-adminer
+    container_name: quadras-adminer
     restart: unless-stopped
     ports:
       - '8080:8080'
