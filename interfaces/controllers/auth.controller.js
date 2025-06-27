@@ -1,13 +1,13 @@
 // src/interfaces/api/controllers/auth.controller.js
-const AuthUseCaseFactory = require('../../../domain/auth/factories/auth-use-case.factory');
-const userRepository = require('../../../infrastructure/database/mysql/repositories/user.repository');
-const authService = require('../../../infrastructure/security/auth.service');
-const tokenService = require('../../../infrastructure/security/token.service');
-const twoFactorService = require('../../../infrastructure/security/two-factor.service');
-const config = require('../../../infrastructure/config');
-const securityConfig = require('../../../infrastructure/security/security.config');
-const logger = require('../../../infrastructure/logging/logger');
-const { BadRequestError, UnauthorizedError } = require('../../../shared/errors/api-error');
+const AuthUseCaseFactory = require('../../domain/auth/factories/auth-use-case.factory');
+const userRepository = require('../../infrastructure/database/mysql/repositories/user.repository');
+const authService = require('../../infrastructure/security/auth.service');
+const tokenService = require('../../infrastructure/security/token.service');
+const twoFactorService = require('../../infrastructure/security/two-factor.service');
+const config = require('../../infrastructure/config');
+const securityConfig = require('../../infrastructure/security/security.config');
+const logger = require('../../infrastructure/logging/logger');
+const { BadRequestError, UnauthorizedError } = require('../../shared/errors/api-error');
 
 /**
  * Controlador para rotas de autenticação

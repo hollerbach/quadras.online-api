@@ -1,13 +1,13 @@
 // src/interfaces/api/controllers/rbac.controller.js
-const rbacRepository = require('../../../infrastructure/database/mysql/repositories/rbac.repository');
-const userRepository = require('../../../infrastructure/database/mysql/repositories/user.repository');
-const { CreateRoleUseCase, AssignRoleToUserUseCase, CreatePermissionUseCase, AddPermissionToRoleUseCase } = require('../../../domain/rbac/use-cases/rbac.use-cases');
-const logger = require('../../../infrastructure/logging/logger');
+const rbacRepository = require('../../infrastructure/database/mysql/repositories/rbac.repository');
+const userRepository = require('../../infrastructure/database/mysql/repositories/user.repository');
+const { CreateRoleUseCase, AssignRoleToUserUseCase, CreatePermissionUseCase, AddPermissionToRoleUseCase } = require('../../domain/rbac/use-cases/rbac.use-cases');
+const logger = require('../../infrastructure/logging/logger');
 
 // Auditoria (opcional)
 let auditService;
 try {
-  auditService = require('../../../infrastructure/logging/audit.service');
+  auditService = require('../../infrastructure/logging/audit.service');
 } catch (error) {
   console.warn('Serviço de auditoria não disponível');
 }

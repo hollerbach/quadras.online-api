@@ -1,6 +1,6 @@
 // src/interfaces/api/middlewares/error.middleware.js
-const logger = require('../../../infrastructure/logging/logger');
-const { ApiError, NotFoundError } = require('../../../shared/errors/api-error');
+const logger = require('../../infrastructure/logging/logger');
+const { ApiError, NotFoundError } = require('../../shared/errors/api-error');
 
 /**
  * Middleware para tratar erros centralizadamente

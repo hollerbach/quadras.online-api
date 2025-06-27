@@ -1,7 +1,7 @@
 // src/interfaces/api/middlewares/rbac.middleware.js
-const { ForbiddenError } = require('../../../shared/errors/api-error');
-const authService = require('../../../infrastructure/security/auth.service');
-const logger = require('../../../infrastructure/logging/logger');
+const { ForbiddenError } = require('../../shared/errors/api-error');
+const authService = require('../../infrastructure/security/auth.service');
+const logger = require('../../infrastructure/logging/logger');
 const { asyncHandler } = require('./error.middleware');
 
 /**

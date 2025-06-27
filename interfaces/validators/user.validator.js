@@ -1,8 +1,8 @@
 // src/interfaces/api/validators/user.validator.js
 const { body } = require('express-validator');
 const { validators, createValidator } = require('../middlewares/validation.middleware');
-const { BadRequestError } = require('../../../shared/errors/api-error');
-const userRepository = require('../../../infrastructure/database/mysql/repositories/user.repository');
+const { BadRequestError } = require('../../shared/errors/api-error');
+const userRepository = require('../../infrastructure/database/mysql/repositories/user.repository');
 
 /**
  * Validações avançadas específicas do domínio
