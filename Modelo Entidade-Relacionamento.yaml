@@ -1,0 +1,171 @@
+# Modelo Entidade-Relacionamento
+## Sistema de Agendamento de Quadras
+
+### Entidades Principais
+
+#### 1. Entity (Entidade)
+```
+- id: ObjectId (PK)
+- name: String (required)
+- description: String
+- address: Object
+  - street: String
+  - city: String
+  - state: String
+  - postalCode: String
+  - coordinates: Object (lat, lng)
+- contact: Object
+  - phone: String
+  - email: String
+  - website: String
+- owner: ObjectId (FK -> User)
+- type: ObjectId (FK -> User)
+- facilities: Array<String> (ex: vestiário, estacionamento, bar)
+- operatingHours: Object
+  - monday: Object { open: String, close: String }
+  - tuesday: Object { open: String, close: String }
+  - tuesday: Object { open: String, close: String }
+  - tuesday: Object { open: String, close: String }
+  - tuesday: Object { open: String, close: String }
+  - tuesday: Object { open: String, close: String }
+  - tuesday: Object { open: String, close: String }
+- settings: Object
+  - allowAdvanceBooking: Number (dias)
+  - cancellationPolicy: String
+  - defaultCancellationHours: Number
+- active: Boolean
+- createdAt: Date
+- updatedAt: Date
+```
+
+#### 2. Court (Quadra)
+```
+- id: ObjectId (PK)
+- club: ObjectId (FK -> Club)
+- name: String (required)
+- type: String (tennis, futebol, basquete, etc.)
+- description: String
+- capacity: Number
+- specifications: Object
+  - surface: String (grama, sintético, concreto)
+  - lighting: Boolean
+  - covered: Boolean
+  - dimensions: Object { length: Number, width: Number }
+- pricing: Object
+  - basePrice: Number
+  - currency: String
+  - priceVariations: Array<Object>
+    - dayOfWeek: Number (0-6)
+    - startTime: String
+    - endTime: String
+    - multiplier: Number
+    - fixedPrice: Number
+- amenities: Array<String>
+- rules: Array<String>
+- maintenanceSchedule: Array<Object>
+  - date: Date
+  - startTime: String
+  - endTime: String
+  - description: String
+- active: Boolean
+- createdAt: Date
+- updatedAt: Date
+```
+
+#### 3. Booking (Agendamento)
+```
+- id: ObjectId (PK)
+- court: ObjectId (FK -> Court)
+- club: ObjectId (FK -> Club)
+- customer: ObjectId (FK -> User)
+- date: Date (data do agendamento)
+- startTime: String (HH:mm)
+- endTime: String (HH:mm)
+- duration: Number (minutos)
+- status: String (pending, confirmed, cancelled, completed)
+- pricing: Object
+  - basePrice: Number
+  - appliedMultiplier: Number
+  - finalPrice: Number
+  - currency: String
+- participants: Array<Object>
+  - name: String
+  - phone: String
+  - email: String
+- notes: String
+- cancellation: Object
+  - cancelledAt: Date
+  - cancelledBy: ObjectId (FK -> User)
+  - reason: String
+  - refundAmount: Number
+- payment: Object
+  - method: String
+  - status: String
+  - transactionId: String
+  - paidAt: Date
+- createdAt: Date
+- updatedAt: Date
+```
+
+#### 4. BookingSlot (Slot de Agendamento)
+```
+- id: ObjectId (PK)
+- court: ObjectId (FK -> Court)
+- date: Date
+- startTime: String
+- endTime: String
+- available: Boolean
+- price: Number
+- booking: ObjectId (FK -> Booking, nullable)
+- blocked: Boolean
+- blockReason: String
+- createdAt: Date
+- updatedAt: Date
+```
+
+### Relacionamentos
+
+1. **User -> Club**: Um usuário pode ser dono de múltiplos clubes (1:N)
+2. **Club -> Court**: Um clube possui múltiplas quadras (1:N)
+3. **Court -> Booking**: Uma quadra pode ter múltiplos agendamentos (1:N)
+4. **User -> Booking**: Um usuário pode fazer múltiplos agendamentos (1:N)
+5. **Court -> BookingSlot**: Uma quadra tem múltiplos slots de tempo (1:N)
+6. **BookingSlot -> Booking**: Um slot pode ter no máximo um agendamento (1:1)
+
+### Índices Recomendados
+
+#### Club
+- owner: 1
+- active: 1
+- "address.city": 1
+
+#### Court
+- club: 1
+- active: 1
+- type: 1
+
+#### Booking
+- court: 1, date: 1
+- customer: 1
+- status: 1
+- date: 1, startTime: 1
+
+#### BookingSlot
+- court: 1, date: 1, startTime: 1 (compound unique)
+- available: 1
+- date: 1
+
+### Permissões RBAC
+
+#### Novas Permissões
+- CLUB_VIEW, CLUB_CREATE, CLUB_EDIT, CLUB_DELETE
+- COURT_VIEW, COURT_CREATE, COURT_EDIT, COURT_DELETE
+- BOOKING_VIEW, BOOKING_CREATE, BOOKING_EDIT, BOOKING_CANCEL
+- BOOKING_ADMIN (para operações administrativas)
+- SCHEDULE_MANAGE (para gerenciar horários disponíveis)
+
+#### Papéis Sugeridos
+- **club_owner**: Proprietário do clube (todas as permissões para seus clubes)
+- **club_manager**: Gerente do clube (gerenciar quadras e agendamentos)
+- **customer**: Cliente (fazer e gerenciar próprios agendamentos)
+- **receptionist**: Recepcionista (criar agendamentos para clientes)
